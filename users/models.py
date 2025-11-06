@@ -1,5 +1,9 @@
+import enum
+
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+
+from myproject.settings import AUTH_USER_MODEL
 
 
 def display_name(user):
@@ -28,3 +32,40 @@ class User(AbstractUser):
 
     def __str__(self):
         return f"{self.last_name} {self.first_name} ({self.username})"
+
+
+class NotificationSourceEnum(enum.Enum):
+    CANTEEN = "canteen"
+    QR_PATROL = "qr_patrol"
+    DISPATCH = "dispatch"
+    SYSTEM = "system"  # неизвестный источник
+
+
+class Notification(models.Model):
+    SERVICE_CHOICES = [
+        (NotificationSourceEnum.CANTEEN.value, "Столовая"),
+        (NotificationSourceEnum.QR_PATROL.value, "QR-обход"),
+        (NotificationSourceEnum.DISPATCH.value, "Диспетчеризация"),
+        (NotificationSourceEnum.SYSTEM.value, "Системное"),
+    ]
+
+    user = models.ForeignKey(
+        AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="notifications"
+    )
+    title = models.TextField(max_length=255, null=True)
+    source = models.CharField(
+        max_length=50,
+        choices=SERVICE_CHOICES,
+        default=NotificationSourceEnum.SYSTEM.value,
+        verbose_name="Источник",
+    )
+    text = models.TextField(max_length=255, null=True)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+    is_seen = models.BooleanField(default=False, verbose_name="Прочитано ли")
+
+    def __str__(self):
+        return f"Уведомление для {self.user}"
+
+    def get_source_display(self):
+        """Возвращает человекочитаемое название источника"""
+        return dict(self.SERVICE_CHOICES).get(self.source, self.source)

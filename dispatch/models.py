@@ -76,10 +76,10 @@ class Duty(models.Model):
     end_datetime = models.DateTimeField(verbose_name='Окончание дежурства', null=False, blank=False)
 
     # Нотификация о том, что у человека сегодня будет дежурство
-    notification_duty_is_coming = models.ForeignKey("Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="duty_is_coming")
+    notification_duty_is_coming = models.ForeignKey("users.Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="duty_is_coming")
 
     # Нотификация о том, что ответственный человек не принял дежурство
-    notification_need_to_open = models.ForeignKey("Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="need_to_open")
+    notification_need_to_open = models.ForeignKey("users.Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="need_to_open")
 
     class Meta:
         verbose_name = "Дежурство"
@@ -139,16 +139,6 @@ class Incident(models.Model):
 
     def __str__(self):
         return f'{self.name} ({self.get_status_display()})'
-
-
-class Notification(models.Model):
-    user = models.ForeignKey(AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='notifications')
-    title = models.TextField(max_length=255, null=True)
-    text = models.TextField(max_length=255, null=True)
-    created_at = models.DateTimeField(auto_now_add=True, null=True)
-
-    def __str__(self):
-        return f"Уведомление для {self.user}"
 
 
 class IncidentMessage(models.Model):
