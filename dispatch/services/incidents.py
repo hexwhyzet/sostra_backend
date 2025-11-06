@@ -3,12 +3,12 @@ from django.db.models import Q
 from dispatch.models import Incident, IncidentStatusEnum
 from dispatch.services.duties import get_current_duties
 from dispatch.services.messages import create_escalation_error_message_duty_not_opened, create_escalation_message
-from dispatch.services.notification import notify_point_admins
+from dispatch.services.notification import notify_point_admins, create_and_notify
 from dispatch.utils import now
 from myapp.admin import user_has_group
 from myapp.custom_groups import DispatchAdminManager
-from myapp.utils import send_fcm_notification
 from myproject.settings import AUTH_USER_MODEL
+from users.models import NotificationSourceEnum
 
 
 def escalate_incident(incident: Incident, escalation_author: AUTH_USER_MODEL):
@@ -34,10 +34,18 @@ def escalate_incident(incident: Incident, escalation_author: AUTH_USER_MODEL):
         incident.responsible_user = duty.user
         incident.status = IncidentStatusEnum.WAITING_TO_BE_ACCEPTED.value
         if incident.responsible_user is not None:
-            send_fcm_notification(incident.responsible_user, incident.name,
-                                  f"Вам поручен инцидент на точке {incident.point.name}")
-            notify_point_admins(incident.point, incident.name,
-                                f"Инцидент был повышен до уровня {incident.level}")
+            create_and_notify(
+                incident.responsible_user,
+                incident.name,
+                f"Вам поручен инцидент на точке {incident.point.name}",
+                NotificationSourceEnum.DISPATCH.value,
+            )
+            notify_point_admins(
+                incident.point,
+                incident.name,
+                f"Инцидент был повышен до уровня {incident.level}",
+                NotificationSourceEnum.DISPATCH.value,
+            )
         create_escalation_message(incident, i, escalation_author, duty)
         break
 
