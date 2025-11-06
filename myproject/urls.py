@@ -22,7 +22,12 @@ from django.views.static import serve
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 from myproject.settings import DEBUG
-from users.views import ChangePasswordView, UserListAPIView
+from users.views import (
+    ChangePasswordView,
+    ReadUserNotificationView,
+    UserListAPIView,
+    UserNotificationsView,
+)
 
 static_urlpatterns = [
     re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
@@ -30,15 +35,29 @@ static_urlpatterns = [
 ] if DEBUG else []
 urlpatterns = [
     # path('admin/', admin_site.urls),
-    path('admin/', admin.site.urls),
-    path('api/', include('myapp.urls')),
-    path('accounts/login/', auth_views.LoginView.as_view(), name='login'),
-    path('tg_bot/', include('tg_bot.urls')),
-    path('api/food/', include('food.urls')),
-    path('api/dispatch/', include('dispatch.urls')),
-    path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
-    path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
-    path('api/auth/change_password/', ChangePasswordView.as_view(), name='change_password'),
-    path('api/users/', UserListAPIView.as_view()),
-    path('', include(static_urlpatterns)),
+    path("admin/", admin.site.urls),
+    path("api/", include("myapp.urls")),
+    path("accounts/login/", auth_views.LoginView.as_view(), name="login"),
+    path("tg_bot/", include("tg_bot.urls")),
+    path("api/food/", include("food.urls")),
+    path("api/dispatch/", include("dispatch.urls")),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+    path(
+        "api/auth/change_password/",
+        ChangePasswordView.as_view(),
+        name="change_password",
+    ),
+    path("api/users/", UserListAPIView.as_view()),
+    path(
+        "api/users/notifications/<int:user_id>/",
+        UserNotificationsView.as_view(),
+        name="user-notifications",
+    ),
+    path(
+        "api/users/notifications/<int:user_id>/mark_as_read/<int:notification_id>/",
+        ReadUserNotificationView.as_view(),
+        name="read-user-notification",
+    ),
+    path("", include(static_urlpatterns)),
 ]

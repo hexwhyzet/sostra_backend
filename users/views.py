@@ -4,8 +4,12 @@ from rest_framework.generics import ListAPIView
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from dispatch.serializers import UserSerializer
-from users.serializers import ChangePasswordSerializer
+from users.models import Notification
+from users.serializers import (
+    ChangePasswordSerializer,
+    NotificationSerializer,
+    UserSerializer,
+)
 
 
 class ChangePasswordView(APIView):
@@ -31,3 +35,42 @@ class UserListAPIView(ListAPIView):
     serializer_class = UserSerializer
     permission_classes = [permissions.IsAuthenticated]
     ordering_fields = get_user_model()._meta.ordering
+
+
+class UserNotificationsView(ListAPIView):
+    def get(self, request, user_id):
+        try:
+            queryset = Notification.objects.filter(user_id=user_id).order_by(
+                "-created_at"
+            )
+
+            result = []
+            for elem in queryset:
+                elem.source = elem.get_source_display()
+                result.append(elem)
+
+            serializer = NotificationSerializer(result, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+
+        except (Exception,) as e:
+            return Response(
+                {"error": "Не найдены уведомления для пользователя с таким ID."},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+
+
+class ReadUserNotificationView(APIView):
+    def post(self, request, user_id, notification_id):
+        try:
+            notification = Notification.objects.get(id=notification_id, user_id=user_id)
+
+            notification.is_seen = True
+            notification.save()
+
+            return Response("success", status=status.HTTP_200_OK)
+
+        except (Exception,) as e:
+            return Response(
+                {"error": "Не найдено уведомление с таким ID для пользователя."},
+                status=status.HTTP_404_NOT_FOUND,
+            )

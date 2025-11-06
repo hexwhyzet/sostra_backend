@@ -1,7 +1,7 @@
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from users.models import display_name
+from users.models import display_name, Notification
 
 
 class ChangePasswordSerializer(serializers.Serializer):
@@ -23,3 +23,9 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_display_name(self, obj):
         return display_name(obj)
+
+
+class NotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Notification
+        fields = ["id", "title", "source", "text", "created_at", "is_seen"]
