@@ -5,6 +5,7 @@ from dispatch.services.access import dispatch_admins
 from dispatch.services.duties import get_current_duties, get_duty_point_by_duty_role
 from dispatch.services.notification import create_and_notify, notify_users
 from dispatch.utils import now
+from users.models import NotificationSourceEnum
 
 
 def need_to_open_notification():
@@ -28,6 +29,7 @@ def need_to_open_notification():
                 duty.user,
                 "Дежурство начато автоматически",
                 f"Дежурство в роли: {duty.role.name}",
+                NotificationSourceEnum.DISPATCH.value,
             )
             duty.save()
 
@@ -39,4 +41,5 @@ def need_to_open_notification():
                 admins,
                 f"Пользователь {duty.user.display_name} не начал дежурство",
                 f"Пользователь {duty.user.display_name} не начал дежурство в роли {duty.role.name}, оно было открыто автоматически.",
+                NotificationSourceEnum.DISPATCH.value,
             )

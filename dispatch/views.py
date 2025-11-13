@@ -9,17 +9,26 @@ from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.permissions import SAFE_METHODS, BasePermission, IsAuthenticated
 from rest_framework.response import Response
 
-from myapp.utils import send_fcm_notification
-from .models import IncidentMessage, Incident, IncidentStatusEnum
-from .serializers import TextMessageSerializer, PhotoMessageSerializer, VideoMessageSerializer, \
-    AudioMessageSerializer, IncidentSerializer, DutySerializer, DutyPointSerializer, IncidentMessageSerializer
+from users.models import NotificationSourceEnum
+
+from .models import Incident, IncidentMessage, IncidentStatusEnum
+from .serializers import (
+    AudioMessageSerializer,
+    DutyPointSerializer,
+    DutySerializer,
+    IncidentMessageSerializer,
+    IncidentSerializer,
+    PhotoMessageSerializer,
+    TextMessageSerializer,
+    VideoMessageSerializer,
+)
 from .services.access import has_dispatch_admin_rights
 from .services.duties import get_duties_by_date, get_current_duties, get_all_duties, get_duty_by_id, \
     get_related_duty_points, get_duty_point_by_duty_role
 from .services.incidents import escalate_incident, user_incidents
 from .services.messages import create_incident_acceptance_message, create_close_escalation_message, \
     create_force_close_escalation_message, create_reopen_escalation_message
-from .services.notification import notify_point_admins
+from .services.notification import notify_point_admins, create_and_notify
 from .utils import now
 
 
@@ -191,8 +200,12 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
 
         if new_user_id == 0:
             for point in get_duty_point_by_duty_role(duty.role):
-                notify_point_admins(point, f"{duty.user.display_name} не может выйти на дежурство",
-                                    f"Необходимо найти замену для {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}")
+                notify_point_admins(
+                    point,
+                    f"{duty.user.display_name} не может выйти на дежурство",
+                    f"Необходимо найти замену для {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}",
+                    NotificationSourceEnum.DISPATCH.value,
+                )
                 return Response(status=204)
 
         if not get_user_model().objects.filter(pk=new_user_id).exists():
@@ -204,11 +217,20 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
         duty.save()
 
         serializer = DutySerializer(duty)
-        send_fcm_notification(duty.user, "Вам передано дежурство", f"{duty.user} передал вам дежурство")
+        create_and_notify(
+            duty.user,
+            "Вам передано дежурство",
+            f"{duty.user} передал вам дежурство",
+            NotificationSourceEnum.DISPATCH.value,
+        )
 
         for point in get_duty_point_by_duty_role(duty.role):
-            notify_point_admins(point, f"{request.user.display_name} не может выйти на дежурство",
-                                f"{request.user.display_name} передал {duty.user.display_name} дежурство {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}")
+            notify_point_admins(
+                point,
+                f"{request.user.display_name} не может выйти на дежурство",
+                f"{request.user.display_name} передал {duty.user.display_name} дежурство {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}",
+                NotificationSourceEnum.DISPATCH.value,
+            )
 
         return Response(serializer.data)
 
