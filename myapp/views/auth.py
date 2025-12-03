@@ -35,8 +35,11 @@ class UserInfo(APIView):
                 available_apps.append(SostraApp.canteen_manager.value)
             elif group.name == CanteenEmployee.name:
                 available_apps.append(SostraApp.canteen.value)
-            elif group.name == DispatchAdminManager.name or has_access_to_dispatch(user):
+            elif group.name == DispatchAdminManager.name:
                 available_apps.append(SostraApp.dispatch.value)
+
+        if has_access_to_dispatch(user):
+            available_apps.append(SostraApp.dispatch.value)
 
         content = {
             'id': user.id,
