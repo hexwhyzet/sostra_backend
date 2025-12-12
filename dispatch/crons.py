@@ -18,7 +18,7 @@ def need_to_open_notification():
         if not duty.is_opened and duty.notification_duty_is_coming is None:
             title = "Вам назначено дежурство сегодня"
             text = f"Дежурство в роли: {duty.role.name}"
-            duty.notification_duty_is_coming = create_and_notify(duty.user, title, text)
+            duty.notification_duty_is_coming = create_and_notify(duty.user, title, text, NotificationSourceEnum.DISPATCH.value)
             duty.save()
 
         if (not duty.is_opened and duty.notification_need_to_open is None
