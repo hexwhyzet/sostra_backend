@@ -11,7 +11,7 @@ def create_notification(user, title, text, source):
 
 def create_and_notify(user, title, text, source):
     notification = create_notification(user, title, text, source)
-    send_fcm_notification(user, notification.title, notification.text)
+    # send_fcm_notification(user, notification.title, notification.text)
     return notification
 
 
