@@ -15,6 +15,10 @@ def has_access_to_dispatch(user: AUTH_USER_MODEL):
         # Если он админ какой-то точки
         return True
 
+    if user.exploitation_roles.exists():
+        # Если он участник какой-то роли эксплуатации
+        return True
+
     return False
 
 
