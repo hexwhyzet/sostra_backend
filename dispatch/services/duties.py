@@ -63,10 +63,10 @@ def get_duty_point_by_duty_role(duty_role: DutyRole):
 
 
 def get_or_create_duty(duty_date: date, role: DutyRole, defaults):
-    defaults['start_datetime'] = datetime(duty_date.year, duty_date.month, duty_date.day, 19, 0, 0)
+    defaults['start_datetime'] = datetime(duty_date.year, duty_date.month, duty_date.day, 17, 30, 0)
 
     next_day = duty_date + timedelta(days=1)
-    defaults['end_datetime'] = datetime(next_day.year, next_day.month, next_day.day, 7, 0, 0)
+    defaults['end_datetime'] = datetime(next_day.year, next_day.month, next_day.day, 8, 30, 0)
     return Duty.objects.get_or_create(start_datetime__date=duty_date, role=role, defaults=defaults)
 
 
