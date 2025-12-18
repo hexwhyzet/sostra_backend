@@ -14,6 +14,7 @@ from dispatch.utils import colors_palette, decl, today
 from food import admin
 from myapp.admin_mixins import CustomAdmin
 from myapp.services.users import get_all_users
+from users.models import Notification
 
 
 class DispatchAdmin(AdminSite):
@@ -240,3 +241,4 @@ def register_dispatch_admin(site):
     site.register(VideoMessage)
     site.register(PhotoMessage)
     site.register(AudioMessage)
+    site.register(Notification)
