@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from myapp.admin_mixins import CustomAdmin
+from users.models import Notification
 
 
 class NotificationAdmin(CustomAdmin):

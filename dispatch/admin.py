@@ -13,7 +13,6 @@ from dispatch.utils import colors_palette, decl, today
 from food import admin
 from myapp.admin_mixins import CustomAdmin
 from myapp.services.users import get_all_users
-from users.models import Notification
 
 
 class DispatchAdmin(AdminSite):
