@@ -18,6 +18,7 @@ from django.utils.html import format_html
 
 from dispatch.admin import register_dispatch_admin
 from food.admin import register_food_admin
+from users.admin import register_user_admin
 from food.models import Feedback
 from myapp.admin_mixins import CustomAdmin
 from myapp.custom_groups import UserManager, SeniorUserManager, CanteenAdminManager
@@ -471,3 +472,4 @@ admin.site.register(Group, GroupAdmin)
 admin.site.register(Device)
 register_food_admin(admin.site)
 register_dispatch_admin(admin.site)
+register_user_admin(admin.site)

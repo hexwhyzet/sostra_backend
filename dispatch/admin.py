@@ -225,17 +225,6 @@ class DutyPointAdmin(CustomAdmin):
     filter_horizontal = ('admins',)
 
 
-class NotificationAdmin(CustomAdmin):
-    readonly_fields = ("created_at",)
-    list_display = ("created_at",)
-
-    def get_fields(self, request, obj=None):
-        fields = list(super().get_fields(request, obj))
-        if "created_at" not in fields:
-            fields.append("created_at")
-        return fields
-
-
 dispatch_admin_site = DispatchAdmin()
 
 
