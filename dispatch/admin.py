@@ -1,6 +1,5 @@
 import calendar
 from datetime import date, timedelta
-
 from django import forms
 from django.contrib.admin import AdminSite
 from django.shortcuts import render
@@ -89,7 +88,6 @@ class ClearDutyForm(forms.Form):
 
 class ExploitationRoleAdmin(CustomAdmin):
     filter_horizontal = ('members',)
-
 
 
 class DutyRoleAdmin(CustomAdmin):
@@ -225,6 +223,10 @@ class IncidentAdmin(CustomAdmin):
 
 class DutyPointAdmin(CustomAdmin):
     filter_horizontal = ('admins',)
+
+
+class NotificationAdmin(CustomAdmin):
+    readonly_fields = ("created_at",)
 
 
 dispatch_admin_site = DispatchAdmin()
