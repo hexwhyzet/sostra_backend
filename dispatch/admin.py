@@ -243,4 +243,4 @@ def register_dispatch_admin(site):
     site.register(VideoMessage)
     site.register(PhotoMessage)
     site.register(AudioMessage)
-    site.register(Notification)
+    site.register(Notification, NotificationAdmin)
