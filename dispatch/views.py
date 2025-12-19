@@ -173,7 +173,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
 
     @action(detail=False, methods=['get'])
     def my_duties(self, request):
-        serializer = DutySerializer(get_current_duties(now(), request.user), many=True)
+        serializer = DutySerializer(get_current_duties(now(), request.user, start_offset=30), many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
