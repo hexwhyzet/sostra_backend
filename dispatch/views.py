@@ -197,13 +197,14 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
             return Response({"error": "Передать дежурство может только сам дежурный"}, status=403)
 
         new_user_id = request.data.get("user_id")
+        transfer_reason = request.data.get('user_reason')
 
         if new_user_id == 0:
             for point in get_duty_point_by_duty_role(duty.role):
                 notify_point_admins(
                     point,
                     f"{duty.user.display_name} не может выйти на дежурство",
-                    f"Необходимо найти замену для {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}",
+                    f"Необходимо найти замену для {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {transfer_reason}",
                     NotificationSourceEnum.DISPATCH.value,
                 )
                 return Response(status=204)
@@ -211,6 +212,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
         if not get_user_model().objects.filter(pk=new_user_id).exists():
             return Response({"error": "Поле user_id в теле запроса некорректное"}, status=403)
 
+        previous_user = duty.user
         duty.user = get_user_model().objects.get(pk=new_user_id)
         duty.notification_duty_is_coming = None
         duty.notification_need_to_open = None
@@ -220,7 +222,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
         create_and_notify(
             duty.user,
             "Вам передано дежурство",
-            f"{duty.user} передал вам дежурство",
+            f"{previous_user.user} передал вам дежурство, по причине: {transfer_reason}",
             NotificationSourceEnum.DISPATCH.value,
         )
 
