@@ -197,7 +197,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
             return Response({"error": "Передать дежурство может только сам дежурный"}, status=403)
 
         new_user_id = request.data.get("user_id")
-        transfer_reason = request.data.get('user_reason')
+        transfer_reason = request.data.get('user_reason') or "Причина не указана"
 
         if new_user_id == 0:
             for point in get_duty_point_by_duty_role(duty.role):
