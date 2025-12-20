@@ -1,8 +1,19 @@
 from rest_framework import serializers
 
 from users.serializers import UserSerializer
-from .models import IncidentMessage, TextMessage, PhotoMessage, VideoMessage, AudioMessage, Incident, Duty, DutyRole, \
-    DutyPoint
+
+from .models import (
+    AudioMessage,
+    Duty,
+    DutyAction,
+    DutyPoint,
+    DutyRole,
+    Incident,
+    IncidentMessage,
+    PhotoMessage,
+    TextMessage,
+    VideoMessage,
+)
 
 
 class DutyPointSerializer(serializers.ModelSerializer):
@@ -56,6 +67,20 @@ class DutySerializer(serializers.ModelSerializer):
 
     def get_date(self, obj):
         return obj.date
+
+
+class DutyActionSerializer(serializers.ModelSerializer):
+    user = UserSerializer(read_only=True)
+    new_user = UserSerializer(read_only=True)
+    duty = DutySerializer(read_only=True)
+    resolved_by = UserSerializer(read_only=True)
+    action_type_display = serializers.CharField(
+        source="get_action_type_display", read_only=True
+    )
+
+    class Meta:
+        model = DutyAction
+        fields = "__all__"
 
 
 class TextMessageSerializer(serializers.ModelSerializer):

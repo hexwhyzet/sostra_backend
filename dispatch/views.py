@@ -1,5 +1,6 @@
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
+from django.utils import timezone
 from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework import viewsets
@@ -11,7 +12,13 @@ from rest_framework.response import Response
 
 from users.models import NotificationSourceEnum
 
-from .models import Incident, IncidentMessage, IncidentStatusEnum
+from .models import (
+    DutyAction,
+    DutyActionTypeEnum,
+    Incident,
+    IncidentMessage,
+    IncidentStatusEnum,
+)
 from .serializers import (
     AudioMessageSerializer,
     DutyPointSerializer,
@@ -23,12 +30,22 @@ from .serializers import (
     VideoMessageSerializer,
 )
 from .services.access import has_dispatch_admin_rights
-from .services.duties import get_duties_by_date, get_current_duties, get_all_duties, get_duty_by_id, \
-    get_related_duty_points, get_duty_point_by_duty_role
+from .services.duties import (
+    get_all_duties,
+    get_current_duties,
+    get_duties_by_date,
+    get_duty_by_id,
+    get_duty_point_by_duty_role,
+    get_related_duty_points,
+)
 from .services.incidents import escalate_incident, user_incidents
-from .services.messages import create_incident_acceptance_message, create_close_escalation_message, \
-    create_force_close_escalation_message, create_reopen_escalation_message
-from .services.notification import notify_point_admins, create_and_notify
+from .services.messages import (
+    create_close_escalation_message,
+    create_force_close_escalation_message,
+    create_incident_acceptance_message,
+    create_reopen_escalation_message,
+)
+from .services.notification import create_and_notify, notify_point_admins
 from .utils import now
 
 
@@ -173,7 +190,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
 
     @action(detail=False, methods=['get'])
     def my_duties(self, request):
-        serializer = DutySerializer(get_current_duties(now(), request.user, start_offset=30), many=True)
+        serializer = DutySerializer(get_current_duties(now(), request.user), many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
@@ -197,43 +214,164 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
             return Response({"error": "Передать дежурство может только сам дежурный"}, status=403)
 
         new_user_id = request.data.get("user_id")
-        transfer_reason = request.data.get('user_reason') or "Причина не указана"
+        user_reason = request.data.get("user_reason", "")
 
         if new_user_id == 0:
+            # Создаем запись об отказе
+            duty_action = DutyAction.objects.create(
+                duty=duty,
+                user=request.user,
+                action_type=DutyActionTypeEnum.REFUSAL.value,
+                reason=user_reason,
+                is_resolved=False,
+            )
+
             for point in get_duty_point_by_duty_role(duty.role):
-                notify_point_admins(
-                    point,
-                    f"{duty.user.display_name} не может выйти на дежурство",
-                    f"Необходимо найти замену для {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {transfer_reason}",
-                    NotificationSourceEnum.DISPATCH.value,
-                )
-                return Response(status=204)
+                import threading
+
+                threading.Thread(
+                    target=notify_point_admins,
+                    args=(
+                        point,
+                        f"{duty.user.display_name} не может выйти на дежурство",
+                        f"Необходимо найти замену для {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {user_reason}",
+                        NotificationSourceEnum.DISPATCH.value,
+                    ),
+                    kwargs={'duty_action': duty_action},
+                    daemon=True
+                ).start()
+            return Response(status=204)
 
         if not get_user_model().objects.filter(pk=new_user_id).exists():
-            return Response({"error": "Поле user_id в теле запроса некорректное"}, status=403)
+            return Response(
+                {"error": "Поле user_id в теле запроса некорректное"}, status=403
+            )
 
-        previous_user = duty.user
-        duty.user = get_user_model().objects.get(pk=new_user_id)
+        new_user = get_user_model().objects.get(pk=new_user_id)
+
+        # Создаем запись о передаче дежурства
+        duty_action = DutyAction.objects.create(
+            duty=duty,
+            user=request.user,
+            action_type=DutyActionTypeEnum.TRANSFER.value,
+            reason=user_reason,
+            new_user=new_user,
+            is_resolved=False,
+        )
+
+        duty.user = new_user
         duty.notification_duty_is_coming = None
         duty.notification_need_to_open = None
         duty.save()
 
         serializer = DutySerializer(duty)
         create_and_notify(
-            duty.user,
+            new_user,
             "Вам передано дежурство",
-            f"{previous_user.user} передал вам дежурство, по причине: {transfer_reason}",
+            f"{request.user.display_name} передал вам дежурство",
             NotificationSourceEnum.DISPATCH.value,
+            duty_action=duty_action,
         )
 
         for point in get_duty_point_by_duty_role(duty.role):
             notify_point_admins(
                 point,
                 f"{request.user.display_name} не может выйти на дежурство",
-                f"{request.user.display_name} передал {duty.user.display_name} дежурство {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}",
+                f"{request.user.display_name} передал {new_user.display_name} дежурство {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {user_reason}",
+                NotificationSourceEnum.DISPATCH.value,
+                duty_action=duty_action,
+            )
+
+        return Response(serializer.data)
+
+    @action(detail=False, methods=["post"])
+    def reassign_by_notification(self, request):
+        """Переназначить дежурство админом через уведомление"""
+        notification_id = request.data.get("notification_id")
+        if not notification_id:
+            return Response({"error": "Необходимо указать notification_id"}, status=400)
+
+        try:
+            from users.models import Notification
+
+            notification = Notification.objects.get(
+                id=notification_id, user=request.user
+            )
+        except Notification.DoesNotExist:
+            return Response({"error": "Уведомление не найдено"}, status=404)
+
+        if not notification.duty_action:
+            return Response(
+                {"error": "Уведомление не связано с действием дежурства"}, status=400
+            )
+
+        duty_action = notification.duty_action
+        duty = duty_action.duty
+
+        # Проверяем права админа
+        from .models import DutyPoint
+        from .services.access import dispatch_admins
+
+        is_dispatch_admin = request.user in dispatch_admins()
+        is_point_admin = (
+            DutyPoint.objects.filter(
+                admins=request.user, level_1_role=duty.role
+            ).exists()
+            or DutyPoint.objects.filter(
+                admins=request.user, level_2_role=duty.role
+            ).exists()
+            or DutyPoint.objects.filter(
+                admins=request.user, level_3_role=duty.role
+            ).exists()
+        )
+
+        if not (is_dispatch_admin or is_point_admin):
+            return Response(
+                {"error": "Только админ может переназначить дежурного"}, status=403
+            )
+
+        new_user_id = request.data.get("user_id")
+        if not new_user_id:
+            return Response({"error": "Необходимо указать user_id"}, status=400)
+
+        if not get_user_model().objects.filter(pk=new_user_id).exists():
+            return Response({"error": "Пользователь не найден"}, status=404)
+
+        new_user = get_user_model().objects.get(pk=new_user_id)
+        old_user = duty.user
+
+        # Переназначаем дежурство
+        duty.user = new_user
+        duty.notification_duty_is_coming = None
+        duty.notification_need_to_open = None
+        duty.save()
+
+        # Помечаем связанные нерешенные действия как решенные
+        unresolved_actions = DutyAction.objects.filter(duty=duty, is_resolved=False)
+        for duty_action_item in unresolved_actions:
+            duty_action_item.is_resolved = True
+            duty_action_item.resolved_by = request.user
+            duty_action_item.resolved_at = timezone.now()
+            duty_action_item.save()
+
+        # Уведомляем нового дежурного
+        create_and_notify(
+            new_user,
+            "Вам назначено дежурство",
+            f"Администратор {request.user.display_name} назначил вам дежурство {duty.role.name} на {duty.date}",
+            NotificationSourceEnum.DISPATCH.value,
+        )
+
+        # Уведомляем старого дежурного
+        if old_user != new_user:
+            create_and_notify(
+                old_user,
+                "Дежурство переназначено",
+                f"Администратор {request.user.display_name} переназначил ваше дежурство {duty.role.name} на {duty.date} пользователю {new_user.display_name}",
                 NotificationSourceEnum.DISPATCH.value,
             )
 
+        serializer = DutySerializer(duty)
         return Response(serializer.data)
 
 
