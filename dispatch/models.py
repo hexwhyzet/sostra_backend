@@ -101,6 +101,62 @@ class Duty(models.Model):
         return f"{self.user} - {self.date} ({self.role})"
 
 
+class DutyActionTypeEnum(enum.Enum):
+    REFUSAL = "refusal"  # Отказ от дежурства
+    TRANSFER = "transfer"  # Передача дежурства
+    ACCEPTANCE = "acceptance"  # Принятие дежурства
+
+
+class DutyAction(models.Model):
+    """Модель для хранения действий с дежурствами (отказы, передачи, принятия)"""
+
+    ACTION_CHOICES = [
+        (DutyActionTypeEnum.REFUSAL.value, "Отказ от дежурства"),
+        (DutyActionTypeEnum.TRANSFER.value, "Передача дежурства"),
+        (DutyActionTypeEnum.ACCEPTANCE.value, "Принятие дежурства"),
+    ]
+
+    duty = models.ForeignKey(
+        Duty, on_delete=models.CASCADE, related_name="actions", verbose_name="Дежурство"
+    )
+    user = models.ForeignKey(
+        AUTH_USER_MODEL, on_delete=models.CASCADE, verbose_name="Пользователь"
+    )
+    action_type = models.CharField(
+        max_length=20, choices=ACTION_CHOICES, verbose_name="Тип действия"
+    )
+    reason = models.TextField(verbose_name="Причина", blank=True, null=True)
+    new_user = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="received_duty_actions",
+        verbose_name="Новый дежурный",
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Время создания")
+    is_resolved = models.BooleanField(default=False, verbose_name="Решено ли")
+    resolved_by = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="resolved_duty_actions",
+        verbose_name="Решено пользователем",
+    )
+    resolved_at = models.DateTimeField(
+        null=True, blank=True, verbose_name="Время решения"
+    )
+
+    class Meta:
+        verbose_name = "Действие с дежурством"
+        verbose_name_plural = "Действия с дежурствами"
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"{self.get_action_type_display()} для {self.duty} от {self.user}"
+
+
 class IncidentStatusEnum(enum.Enum):
     OPENED = 'opened'
     CLOSED = 'closed'
