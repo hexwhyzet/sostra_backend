@@ -190,7 +190,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
 
     @action(detail=False, methods=['get'])
     def my_duties(self, request):
-        serializer = DutySerializer(get_current_duties(now(), request.user), many=True)
+        serializer = DutySerializer(get_current_duties(now(), request.user, start_offset=30), many=True)
         return Response(serializer.data)
 
     @action(detail=True, methods=['post'])
@@ -214,7 +214,7 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
             return Response({"error": "Передать дежурство может только сам дежурный"}, status=403)
 
         new_user_id = request.data.get("user_id")
-        user_reason = request.data.get("user_reason", "")
+        user_reason = request.data.get("user_reason", "не указана")
 
         if new_user_id == 0:
             # Создаем запись об отказе
