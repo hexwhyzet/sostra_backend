@@ -222,15 +222,15 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
         create_and_notify(
             duty.user,
             "Вам передано дежурство",
-            f"{previous_user.user} передал вам дежурство, по причине: {transfer_reason}",
+            f"{previous_user.display_name} передал вам дежурство, по причине: {transfer_reason}",
             NotificationSourceEnum.DISPATCH.value,
         )
 
         for point in get_duty_point_by_duty_role(duty.role):
             notify_point_admins(
                 point,
-                f"{request.user.display_name} не может выйти на дежурство",
-                f"{request.user.display_name} передал {duty.user.display_name} дежурство {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}",
+                f"{previous_user.display_name} не может выйти на дежурство",
+                f"{previous_user.display_name} передал {duty.user.display_name} дежурство {duty.role.name} на системе дежурств {point.name}. Причина пользователя: {request.data.get('user_reason')}",
                 NotificationSourceEnum.DISPATCH.value,
             )
 
