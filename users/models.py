@@ -62,6 +62,14 @@ class Notification(models.Model):
     text = models.TextField(max_length=255, null=True)
     created_at = models.DateTimeField(auto_now_add=True, null=True)
     is_seen = models.BooleanField(default=False, verbose_name="Прочитано ли")
+    duty_action = models.ForeignKey(
+        "dispatch.DutyAction",
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True,
+        related_name="notifications",
+        verbose_name="Действие с дежурством",
+    )
 
     def __str__(self):
         return f"Уведомление для {self.user}"

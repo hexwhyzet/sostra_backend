@@ -26,6 +26,31 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class NotificationSerializer(serializers.ModelSerializer):
+    duty_action_id = serializers.IntegerField(source="duty_action.id", read_only=True)
+    duty_id = serializers.IntegerField(source="duty_action.duty.id", read_only=True)
+    is_resolved = serializers.IntegerField(
+        source="duty_action.is_resolved", read_only=True
+    )
+
+    def get_duty_action_reason(self, obj):
+        value = getattr(obj.duty_action, "reason", None)
+        if not value or len(value) == 0:
+            return "не указана"
+        return value
+
+    duty_action_reason = serializers.SerializerMethodField()
+
     class Meta:
         model = Notification
-        fields = ["id", "title", "source", "text", "created_at", "is_seen"]
+        fields = [
+            "id",
+            "title",
+            "source",
+            "text",
+            "created_at",
+            "is_seen",
+            "duty_id",
+            "duty_action_id",
+            "is_resolved",
+            "duty_action_reason",
+        ]
