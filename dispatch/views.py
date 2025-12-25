@@ -214,7 +214,9 @@ class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/cr
             return Response({"error": "Передать дежурство может только сам дежурный"}, status=403)
 
         new_user_id = request.data.get("user_id")
-        user_reason = request.data.get("user_reason", "не указана")
+        user_reason = request.data.get("user_reason")
+        if not user_reason or len(user_reason) == 0:
+            user_reason = "не указана"
 
         if new_user_id == 0:
             # Создаем запись об отказе
