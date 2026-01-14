@@ -1,0 +1,212 @@
+{% extends 'admin/base_site.html' %}
+
+{% block content %}
+<h1>Статистика по инцидентам</h1>
+
+<form method="post" style="margin-bottom: 20px;">
+    {% csrf_token %}
+    <table style="width: 100%; border-collapse: collapse;">
+        <tr>
+            <td style="padding: 10px;">
+                <label for="start_date">Дата начала:</label><br>
+                <input type="date" id="start_date" name="start_date" value="{{ form_data.start_date|default:'' }}" style="width: 100%; padding: 5px;">
+            </td>
+            <td style="padding: 10px;">
+                <label for="end_date">Дата окончания:</label><br>
+                <input type="date" id="end_date" name="end_date" value="{{ form_data.end_date|default:'' }}" style="width: 100%; padding: 5px;">
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 10px;">
+                <label for="status">Статус:</label><br>
+                <select id="status" name="status" style="width: 100%; padding: 5px;">
+                    <option value="">Все статусы</option>
+                    {% for status_value, status_display in status_choices %}
+                        <option value="{{ status_value }}" {% if form_data.status == status_value %}selected{% endif %}>
+                            {{ status_display }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td style="padding: 10px;">
+                <label for="point_id">Система дежурства:</label><br>
+                <select id="point_id" name="point_id" style="width: 100%; padding: 5px;">
+                    <option value="">Все системы</option>
+                    {% for point in points %}
+                        <option value="{{ point.id }}" {% if form_data.point_id == point.id|stringformat:"s" %}selected{% endif %}>
+                            {{ point.name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </td>
+        </tr>
+        <tr>
+            <td style="padding: 10px;">
+                <label for="responsible_user_id">Ответственный дежурный:</label><br>
+                <select id="responsible_user_id" name="responsible_user_id" style="width: 100%; padding: 5px;">
+                    <option value="">Все дежурные</option>
+                    {% for user in users %}
+                        <option value="{{ user.id }}" {% if form_data.responsible_user_id == user.id|stringformat:"s" %}selected{% endif %}>
+                            {{ user.display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </td>
+            <td style="padding: 10px;">
+                <label for="author_id">Автор:</label><br>
+                <select id="author_id" name="author_id" style="width: 100%; padding: 5px;">
+                    <option value="">Все авторы</option>
+                    {% for user in users %}
+                        <option value="{{ user.id }}" {% if form_data.author_id == user.id|stringformat:"s" %}selected{% endif %}>
+                            {{ user.display_name }}
+                        </option>
+                    {% endfor %}
+                </select>
+            </td>
+        </tr>
+    </table>
+    <button type="submit" class="button" style="margin-top: 10px;">Сформировать отчет</button>
+</form>
+
+{% if statistics %}
+    <h2>Метрики</h2>
+    <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <tr>
+            <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Метрика</th>
+            <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Значение</th>
+        </tr>
+        <tr>
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>Всего инцидентов</strong></td>
+            <td style="padding: 10px; border: 1px solid #ddd;"><strong>{{ statistics.total_count }}</strong></td>
+        </tr>
+        <tr>
+            <td style="padding: 10px; border: 1px solid #ddd;">Средний уровень эскалации</td>
+            <td style="padding: 10px; border: 1px solid #ddd;">{{ statistics.average_level }}</td>
+        </tr>
+    </table>
+
+    <h2>Статистика по статусам</h2>
+    <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Статус</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Количество</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Процент</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for status_value, status_data in statistics.status_statistics.items %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ status_data.display }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ status_data.count }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ status_data.percentage }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Статистика по критичности</h2>
+    <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Тип</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Количество</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Процент</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">Критичные</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ statistics.critical_statistics.critical.count }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ statistics.critical_statistics.critical.percentage }}%</td>
+            </tr>
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">Некритичные</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ statistics.critical_statistics.non_critical.count }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ statistics.critical_statistics.non_critical.percentage }}%</td>
+            </tr>
+        </tbody>
+    </table>
+
+    {% if statistics.point_statistics %}
+    <h2>Статистика по системам дежурства</h2>
+    <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Система</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Количество</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Процент</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for point_id, point_data in statistics.point_statistics.items %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ point_data.name }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ point_data.count }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ point_data.percentage }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    {% if statistics.responsible_statistics %}
+    <h2>Статистика по ответственным дежурным</h2>
+    <table class="table" style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Дежурный</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Количество</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Процент</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for user_id, user_data in statistics.responsible_statistics.items %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ user_data.name }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ user_data.count }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ user_data.percentage }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+
+    <h2>Список инцидентов</h2>
+    <table class="table" style="width: 100%; border-collapse: collapse;">
+        <thead>
+            <tr>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Название</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Описание</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Автор</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Ответственный</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Система</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Статус</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Уровень</th>
+                <th style="padding: 10px; border: 1px solid #ddd; background-color: #f2f2f2;">Дата создания</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for incident in statistics.incidents %}
+            <tr>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.name }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.description|truncatewords:20 }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.author__display_name|default:"-" }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.responsible_user__display_name|default:"-" }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.point__name|default:"-" }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">
+                    {% for status_value, status_display in status_choices %}
+                        {% if status_value == incident.status %}{{ status_display }}{% endif %}
+                    {% endfor %}
+                </td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.level }}</td>
+                <td style="padding: 10px; border: 1px solid #ddd;">{{ incident.created_at|date:"d.m.Y H:i" }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+<a href="{% url 'admin:dispatch_incident_changelist' %}" class="button" style="margin-top: 20px;">Вернуться к списку инцидентов</a>
+{% endblock %}
+

@@ -18,9 +18,4 @@ class Migration(migrations.Migration):
             old_name='name',
             new_name='name_old',
         ),
-        migrations.AlterField(
-            model_name='guard',
-            name='user',
-            field=models.ForeignKey(default=None, null=True, on_delete=django.db.models.deletion.CASCADE, related_name='guard_profile', to='myapp.verboseuserdisplay', verbose_name='Аккаунт сотрудника'),
-        ),
     ]

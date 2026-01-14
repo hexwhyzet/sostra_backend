@@ -7,7 +7,8 @@ from django.urls import path
 from django.utils.html import format_html
 
 from dispatch.models import DutyPoint, DutyRole, Duty, IncidentMessage, TextMessage, VideoMessage, PhotoMessage, \
-    AudioMessage, Incident, ExploitationRole
+    AudioMessage, Incident, ExploitationRole, IncidentStatusEnum
+from dispatch.services.incident_statistics import get_incident_statistics
 from dispatch.services.duties import get_duties_by_date, get_duties_assigned, get_or_create_duty, delete_duty
 from dispatch.utils import colors_palette, decl, today
 from food import admin
@@ -196,6 +197,7 @@ class DutyAdmin(CustomAdmin):
 class IncidentAdmin(CustomAdmin):
     list_display = ('name', 'incident_chat_action', 'author', 'status', 'level', 'created_at',)
     readonly_fields = ('created_at',)
+    change_list_template = 'admin/dispatch/incident/change_list.html'
 
     def incident_chat_action(self, obj):
         return format_html('<a class="button" style="color: green; background: none" href="{}">Открыть чат</a>',
@@ -203,10 +205,16 @@ class IncidentAdmin(CustomAdmin):
 
     incident_chat_action.short_description = ''
 
+    def changelist_view(self, request, extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_statistics_button'] = True
+        return super().changelist_view(request, extra_context=extra_context)
+
     def get_urls(self):
         urls = super().get_urls()
         custom_urls = [
             path('<int:object_id>/chat/', self.admin_site.admin_view(self.incident_chat), name='incident-chat'),
+            path('statistics/', self.admin_site.admin_view(self.incident_statistics), name='incident-statistics'),
         ]
         return custom_urls + urls
 
@@ -218,6 +226,91 @@ class IncidentAdmin(CustomAdmin):
         }
 
         return render(request, 'admin/dispatch/incident.html', context)
+
+    def incident_statistics(self, request):
+        """Страница статистики по инцидентам"""
+        from django.contrib.auth import get_user_model
+        from datetime import date
+        
+        statistics = None
+        form_data = {}
+        
+        if request.method == 'POST':
+            start_date_str = request.POST.get('start_date')
+            end_date_str = request.POST.get('end_date')
+            status = request.POST.get('status')
+            responsible_user_id = request.POST.get('responsible_user_id')
+            point_id = request.POST.get('point_id')
+            author_id = request.POST.get('author_id')
+            
+            form_data = {
+                'start_date': start_date_str,
+                'end_date': end_date_str,
+                'status': status,
+                'responsible_user_id': responsible_user_id,
+                'point_id': point_id,
+                'author_id': author_id,
+            }
+            
+            start_date = None
+            end_date = None
+            
+            if start_date_str:
+                try:
+                    start_date = date.fromisoformat(start_date_str)
+                except ValueError:
+                    pass
+            
+            if end_date_str:
+                try:
+                    end_date = date.fromisoformat(end_date_str)
+                except ValueError:
+                    pass
+            
+            responsible_user_id_int = None
+            if responsible_user_id:
+                try:
+                    responsible_user_id_int = int(responsible_user_id)
+                except (ValueError, TypeError):
+                    pass
+            
+            point_id_int = None
+            if point_id:
+                try:
+                    point_id_int = int(point_id)
+                except (ValueError, TypeError):
+                    pass
+            
+            author_id_int = None
+            if author_id:
+                try:
+                    author_id_int = int(author_id)
+                except (ValueError, TypeError):
+                    pass
+            
+            statistics = get_incident_statistics(
+                start_date=start_date,
+                end_date=end_date,
+                status=status if status else None,
+                responsible_user_id=responsible_user_id_int,
+                point_id=point_id_int,
+                author_id=author_id_int,
+            )
+        
+        # Получаем данные для фильтров
+        users = get_user_model().objects.all().order_by('last_name', 'first_name')
+        points = DutyPoint.objects.all().order_by('name')
+        status_choices = Incident.STATUS_CHOICES
+        
+        context = {
+            'statistics': statistics,
+            'form_data': form_data,
+            'users': users,
+            'points': points,
+            'status_choices': status_choices,
+        }
+        
+        return render(request, 'admin/dispatch/incident_statistics.html', context)
 
 
 class DutyPointAdmin(CustomAdmin):

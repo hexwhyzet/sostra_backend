@@ -34,6 +34,18 @@ def need_to_open_notification_job():
     need_to_open_notification()
     logger.info("[need_to_open_notification] tick")
 
+@register_job(
+    scheduler,
+    trigger=IntervalTrigger(hours=24),
+    id="check_missing_duties",
+    replace_existing=True,
+    max_instances=1,
+)
+def check_missing_duties_job():
+    from dispatch.crons import check_missing_duties
+    check_missing_duties()
+    logger.info("[check_missing_duties] tick")
+
 
 class Command(BaseCommand):
     help = "Run APScheduler in this process"

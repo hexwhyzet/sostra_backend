@@ -28,6 +28,10 @@ from users.views import (
     UserListAPIView,
     UserNotificationsView,
 )
+from users.views_password_reset import (
+    PasswordResetRequestView,
+    PasswordResetConfirmView,
+)
 
 static_urlpatterns = [
     re_path(r"^media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}),
@@ -47,6 +51,16 @@ urlpatterns = [
         "api/auth/change_password/",
         ChangePasswordView.as_view(),
         name="change_password",
+    ),
+    path(
+        "api/auth/password_reset/request/",
+        PasswordResetRequestView.as_view(),
+        name="password_reset_request",
+    ),
+    path(
+        "api/auth/password_reset/confirm/",
+        PasswordResetConfirmView.as_view(),
+        name="password_reset_confirm",
     ),
     path("api/users/", UserListAPIView.as_view()),
     path(
