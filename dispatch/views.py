@@ -39,6 +39,7 @@ from .services.duties import (
     get_related_duty_points,
 )
 from .services.incidents import escalate_incident, user_incidents
+from .services.incident_statistics import get_incident_statistics
 from .services.messages import (
     create_close_escalation_message,
     create_force_close_escalation_message,
@@ -169,6 +170,73 @@ class IncidentViewSet(viewsets.ViewSet):
 
         serializer = IncidentSerializer(incidents, many=True)
         return Response(serializer.data)
+
+    @action(detail=False, methods=["get"])
+    def statistics(self, request):
+        """
+        Получает статистику по инцидентам с фильтрами
+        
+        Параметры запроса:
+        - start_date: Дата начала периода (YYYY-MM-DD)
+        - end_date: Дата окончания периода (YYYY-MM-DD)
+        - status: Статус инцидента (opened, closed, force_closed, waiting_to_be_accepted)
+        - responsible_user_id: ID ответственного дежурного
+        - point_id: ID системы дежурства
+        - author_id: ID автора инцидента
+        """
+        start_date_str = request.query_params.get('start_date')
+        end_date_str = request.query_params.get('end_date')
+        status = request.query_params.get('status')
+        responsible_user_id = request.query_params.get('responsible_user_id')
+        point_id = request.query_params.get('point_id')
+        author_id = request.query_params.get('author_id')
+        
+        start_date = None
+        end_date = None
+        
+        if start_date_str:
+            try:
+                start_date = parse_date(start_date_str)
+            except (ValueError, TypeError):
+                return Response({"error": "Неверный формат start_date. Используйте YYYY-MM-DD."}, status=400)
+        
+        if end_date_str:
+            try:
+                end_date = parse_date(end_date_str)
+            except (ValueError, TypeError):
+                return Response({"error": "Неверный формат end_date. Используйте YYYY-MM-DD."}, status=400)
+        
+        responsible_user_id_int = None
+        if responsible_user_id:
+            try:
+                responsible_user_id_int = int(responsible_user_id)
+            except (ValueError, TypeError):
+                return Response({"error": "responsible_user_id должен быть числом"}, status=400)
+        
+        point_id_int = None
+        if point_id:
+            try:
+                point_id_int = int(point_id)
+            except (ValueError, TypeError):
+                return Response({"error": "point_id должен быть числом"}, status=400)
+        
+        author_id_int = None
+        if author_id:
+            try:
+                author_id_int = int(author_id)
+            except (ValueError, TypeError):
+                return Response({"error": "author_id должен быть числом"}, status=400)
+        
+        statistics = get_incident_statistics(
+            start_date=start_date,
+            end_date=end_date,
+            status=status,
+            responsible_user_id=responsible_user_id_int,
+            point_id=point_id_int,
+            author_id=author_id_int,
+        )
+        
+        return Response(statistics)
 
 
 class DutyViewSet(viewsets.ReadOnlyModelViewSet):  # ReadOnly since no update/create

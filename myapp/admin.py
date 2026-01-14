@@ -7,7 +7,7 @@ from django.contrib import admin
 from django.contrib.admin import AdminSite
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin, GroupAdmin
-from django.contrib.auth.forms import SetPasswordForm
+from django.contrib.auth.forms import SetPasswordForm, UserCreationForm
 from django.contrib.auth.models import Group
 from django.core.exceptions import PermissionDenied
 from django.http import HttpResponse
@@ -368,13 +368,39 @@ def user_has_group(user, group):
     return user.groups.filter(name=group.name).exists()
 
 
+class CustomUserCreationForm(UserCreationForm):
+    phone = forms.CharField(
+        max_length=20,
+        required=True,
+        label="Номер телефона",
+        help_text="Формат: +7XXXXXXXXXX",
+        widget=forms.TextInput(attrs={'placeholder': '+7XXXXXXXXXX'})
+    )
+
+    class Meta:
+        model = get_user_model()
+        fields = ('username', 'first_name', 'last_name', 'phone')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields['phone'].required = True
+
+    def clean_phone(self):
+        phone = self.cleaned_data.get('phone')
+        if not phone:
+            raise forms.ValidationError("Номер телефона обязателен для новых пользователей")
+        return phone
+
+
 class CustomUserAdmin(UserAdmin):
+    add_form = CustomUserCreationForm
+    
     add_fieldsets = (
         (
             None,
             {
                 'classes': ('wide',),
-                'fields': ('username', 'password1', 'password2', 'first_name', 'last_name', 'is_staff', 'must_change_password', 'telegram_user_id'),
+                'fields': ('username', 'password1', 'password2', 'first_name', 'last_name', 'phone', 'is_staff', 'must_change_password', 'telegram_user_id'),
             },
         ),
     )
@@ -384,7 +410,7 @@ class CustomUserAdmin(UserAdmin):
             return self.add_fieldsets
 
         if not request.user.is_superuser:
-            return ((None, {'fields': ('username', 'first_name', 'last_name', 'is_staff', 'groups', 'must_change_password', 'telegram_user_id')}),)
+            return ((None, {'fields': ('username', 'first_name', 'last_name', 'phone', 'is_staff', 'groups', 'must_change_password', 'telegram_user_id')}),)
         else:
             fieldsets = list(super().get_fieldsets(request, obj))
             first_fields = list(fieldsets[0][1]['fields'])
@@ -392,6 +418,8 @@ class CustomUserAdmin(UserAdmin):
                 first_fields.append('must_change_password')
             if 'telegram_user_id' not in first_fields:
                 first_fields.append('telegram_user_id')
+            if 'phone' not in first_fields:
+                first_fields.append('phone')
             fieldsets[0][1]['fields'] = tuple(first_fields)
             return fieldsets
 

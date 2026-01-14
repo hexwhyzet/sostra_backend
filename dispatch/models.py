@@ -78,6 +78,9 @@ class Duty(models.Model):
     # Нотификация о том, что у человека сегодня будет дежурство
     notification_duty_is_coming = models.ForeignKey("users.Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="duty_is_coming")
 
+    # Повторное уведомление о дежурстве через 15 минут после первого
+    notification_duty_reminder = models.ForeignKey("users.Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="duty_reminder")
+
     # Нотификация о том, что ответственный человек не принял дежурство
     notification_need_to_open = models.ForeignKey("users.Notification", on_delete=models.SET_NULL, null=True, blank=True, related_name="need_to_open")
 
