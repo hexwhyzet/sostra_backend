@@ -1,9 +1,14 @@
 # dispatch/cron.py
 from datetime import timedelta, datetime, date
 
-from dispatch.models import DutyRole, DutyPoint
+from dispatch.models import DutyRole, DutyPoint, WeekendDutyAssignment, Duty
 from dispatch.services.access import dispatch_admins
-from dispatch.services.duties import get_current_duties, get_duty_point_by_duty_role, get_duties_by_date
+from dispatch.services.duties import (
+    get_current_duties,
+    get_duty_point_by_duty_role,
+    get_duties_by_date,
+    get_or_create_duty,
+)
 from dispatch.services.notification import create_and_notify, notify_users, notify_point_admins
 from dispatch.utils import now, today
 from users.models import NotificationSourceEnum
@@ -103,3 +108,79 @@ def check_missing_duties():
                 text,
                 NotificationSourceEnum.DISPATCH.value,
             )
+
+
+def ensure_weekend_duties(days_ahead: int = 4):
+    """
+    Раз в сутки проверяет: если в ближайшие N дней есть выходные (суб/вс) без дежурств,
+    то автоматически создаёт дежурства по настроенным назначениям WeekendDutyAssignment.
+    Если для нужной роли на суб/вс не задано назначение — уведомляет dispatch-админов.
+    """
+    start_date = today()
+    end_date = start_date + timedelta(days=max(days_ahead, 1) - 1)
+
+    # Какие роли вообще используются в системах дежурств
+    roles_to_check = set()
+    for point in DutyPoint.objects.all().only("level_1_role", "level_2_role", "level_3_role"):
+        if point.level_1_role_id:
+            roles_to_check.add(point.level_1_role_id)
+        if point.level_2_role_id:
+            roles_to_check.add(point.level_2_role_id)
+        if point.level_3_role_id:
+            roles_to_check.add(point.level_3_role_id)
+
+    if not roles_to_check:
+        return []
+
+    assignments = list(
+        WeekendDutyAssignment.objects.filter(is_active=True)
+        .select_related("role", "user")
+        .only("role_id", "weekday", "user_id")
+    )
+    assignments_by_key = {(a.role_id, a.weekday): a for a in assignments}
+
+    created = []
+    missing_assignments = []
+
+    current = start_date
+    while current <= end_date:
+        weekday = current.weekday()
+        if weekday not in (WeekendDutyAssignment.SATURDAY, WeekendDutyAssignment.SUNDAY):
+            current += timedelta(days=1)
+            continue
+
+        existing_role_ids = set(
+            Duty.objects.filter(start_datetime__date=current, role_id__in=roles_to_check).values_list("role_id", flat=True)
+        )
+        for role_id in roles_to_check.difference(existing_role_ids):
+            assignment = assignments_by_key.get((role_id, weekday))
+            if assignment is None:
+                missing_assignments.append((current, role_id, weekday))
+                continue
+
+            duty, duty_created = get_or_create_duty(
+                duty_date=current,
+                role=assignment.role,
+                defaults={"user": assignment.user},
+            )
+            if duty_created:
+                created.append(duty)
+
+        current += timedelta(days=1)
+
+    if missing_assignments:
+        role_map = {r.id: r for r in DutyRole.objects.filter(id__in=[rid for _, rid, _ in missing_assignments]).only("id", "name")}
+        lines = []
+        for missing_date, role_id, weekday in missing_assignments:
+            role_name = role_map.get(role_id).name if role_id in role_map else f"роль {role_id}"
+            weekday_name = "суббота" if weekday == WeekendDutyAssignment.SATURDAY else "воскресенье"
+            lines.append(f"{missing_date.strftime('%d.%m.%Y')} ({weekday_name}) — {role_name}")
+
+        notify_users(
+            list(dispatch_admins()),
+            "Не настроены дежурные на выходные",
+            "Для следующих выходных дат не задано назначение:\n" + "\n".join(lines),
+            NotificationSourceEnum.DISPATCH.value,
+        )
+
+    return created

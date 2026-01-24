@@ -1,17 +1,17 @@
 import calendar
 from datetime import date, timedelta
 from django import forms
+from django.contrib import admin
 from django.contrib.admin import AdminSite
 from django.shortcuts import render
 from django.urls import path
 from django.utils.html import format_html
 
 from dispatch.models import DutyPoint, DutyRole, Duty, IncidentMessage, TextMessage, VideoMessage, PhotoMessage, \
-    AudioMessage, Incident, ExploitationRole, IncidentStatusEnum
+    AudioMessage, Incident, ExploitationRole, IncidentStatusEnum, WeekendDutyAssignment
 from dispatch.services.incident_statistics import get_incident_statistics
 from dispatch.services.duties import get_duties_by_date, get_duties_assigned, get_or_create_duty, delete_duty
 from dispatch.utils import colors_palette, decl, today
-from food import admin
 from myapp.admin_mixins import CustomAdmin
 from myapp.services.users import get_all_users
 
@@ -90,8 +90,16 @@ class ExploitationRoleAdmin(CustomAdmin):
     filter_horizontal = ('members',)
 
 
+class WeekendDutyAssignmentInline(admin.TabularInline):
+    model = WeekendDutyAssignment
+    extra = 0
+    fields = ("weekday", "user", "is_active")
+    ordering = ("weekday",)
+
+
 class DutyRoleAdmin(CustomAdmin):
     list_display = ['name', 'next_duty_stats', 'duty_schedule']
+    inlines = [WeekendDutyAssignmentInline]
 
     def get_urls(self):
         urls = super().get_urls()
@@ -185,6 +193,11 @@ class DutyRoleAdmin(CustomAdmin):
         return format_html(f'<a style="color: {color}; font-weight: {font_weight}">{num} {name}</a>')
 
     next_duty_stats.short_description = 'Кол-во распланированных дней'
+
+class WeekendDutyAssignmentAdmin(CustomAdmin):
+    list_display = ("role", "weekday", "user", "is_active")
+    list_filter = ("weekday", "is_active", "role")
+    search_fields = ("role__name", "user__username", "user__first_name", "user__last_name")
 
 
 class DutyAdmin(CustomAdmin):
@@ -325,6 +338,7 @@ def register_dispatch_admin(site):
     site.register(ExploitationRole, ExploitationRoleAdmin)
     site.register(DutyRole, DutyRoleAdmin)
     site.register(Duty, DutyAdmin)
+    site.register(WeekendDutyAssignment, WeekendDutyAssignmentAdmin)
     site.register(Incident, IncidentAdmin)
     site.register(IncidentMessage)
     site.register(TextMessage)

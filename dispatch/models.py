@@ -104,6 +104,44 @@ class Duty(models.Model):
         return f"{self.user} - {self.date} ({self.role})"
 
 
+class WeekendDutyAssignment(models.Model):
+    SATURDAY = 5
+    SUNDAY = 6
+
+    WEEKDAY_CHOICES = [
+        (SATURDAY, "Суббота"),
+        (SUNDAY, "Воскресенье"),
+    ]
+
+    role = models.ForeignKey(
+        DutyRole,
+        on_delete=models.CASCADE,
+        related_name="weekend_assignments",
+        verbose_name="Роль дежурства",
+    )
+    weekday = models.PositiveSmallIntegerField(
+        choices=WEEKDAY_CHOICES,
+        verbose_name="День недели",
+        help_text="Только суббота/воскресенье",
+    )
+    user = models.ForeignKey(
+        AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        verbose_name="Дежурный",
+    )
+    is_active = models.BooleanField(default=True, verbose_name="Активно")
+
+    class Meta:
+        verbose_name = "Дежурный на выходные"
+        verbose_name_plural = "Дежурные на выходные"
+        constraints = [
+            UniqueConstraint(fields=["role", "weekday"], name="unique_weekend_assignment"),
+        ]
+
+    def __str__(self):
+        return f"{self.role} - {self.get_weekday_display()}: {self.user}"
+
+
 class DutyActionTypeEnum(enum.Enum):
     REFUSAL = "refusal"  # Отказ от дежурства
     TRANSFER = "transfer"  # Передача дежурства
