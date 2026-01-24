@@ -36,7 +36,7 @@ class PasswordResetRequestView(APIView):
         token_obj = PasswordResetToken.create_token(user, phone)
         
         # Отправляем SMS с кодом
-        message = f"Код для восстановления пароля: {token_obj.code}. Действителен 15 минут."
+        message = f"Ваш код: {token_obj.code}"
         sms_sent = send_sms(phone, message)
         
         if not sms_sent:

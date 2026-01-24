@@ -32,8 +32,9 @@ def need_to_open_notification():
             duty.notification_duty_reminder = create_and_notify(duty.user, title, text, NotificationSourceEnum.DISPATCH.value)
             duty.save()
 
+        # Автоматическое открытие дежурства через 15 минут после напоминания, если дежурство еще не принято
         if (not duty.is_opened and duty.notification_need_to_open is None
-                and now() - duty.start_datetime > timedelta(minutes=15)):
+                and now() - duty.notification_duty_reminder.created_at > timedelta(minutes=15)):
             duty.is_opened = True
             duty.is_forced_opened = True
             duty.notification_need_to_open = create_and_notify(
