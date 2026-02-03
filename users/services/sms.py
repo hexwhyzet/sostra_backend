@@ -3,16 +3,19 @@ import requests
 from django.conf import settings
 
 
+SMSAERO_API_URL = "https://gate.smsaero.ru/v2/sms/send"
+
+
 def send_sms(phone: str, message: str) -> bool:
     """
     Отправляет SMS сообщение.
     Поддерживает различные SMS-провайдеры через переменные окружения.
     
     Для настройки используйте переменные окружения:
-    - SMS_PROVIDER: только 'smsru'
+    - SMS_PROVIDER: только 'smsaero'
     - SMS_API_KEY: API ключ провайдера
     """
-    provider = os.getenv('SMS_PROVIDER', 'smsru').lower()
+    provider = os.getenv('SMS_PROVIDER', 'smsaero').lower()
     api_key = os.getenv('SMS_API_KEY', '')
     
     if not api_key:
@@ -20,8 +23,8 @@ def send_sms(phone: str, message: str) -> bool:
         return False
     
     try:
-        if provider == 'smsru':
-            return _send_sms_smsru(phone, message, api_key)
+        if provider == 'smsaero':
+            return _send_sms_smsaero(phone[1:], message, api_key)
         else:
             print(f"Unknown SMS provider: {provider}")
             return False
@@ -30,15 +33,47 @@ def send_sms(phone: str, message: str) -> bool:
         return False
 
 
-def _send_sms_smsru(phone: str, message: str, api_key: str) -> bool:
-    """Отправка SMS через sms.ru"""
-    url = "https://sms.ru/sms/send"
-    params = {
-        'api_id': api_key,
-        'to': phone[1:],
-        'msg': message,
-        'json': 1
+def _send_sms_smsaero(
+        phone: str,
+        message: str,
+        api_key: str
+) -> bool:
+    """
+    Отправляет SMS через API SMS Aero.
+
+    Аргументы:
+    - phone: номер получателя в формате 7XXXXXXXXXX
+    - message: текст SMS
+    - api_key: ваш API ключ из кабинета SMS Aero
+    - email: email, с которым зарегистрирован API ключ
+    - sender: имя отправителя (numeric или текст, если подтверждено)
+
+    Возвращает True если сообщение успешно отправлено.
+    """
+
+    email = os.getenv('SMSAERO_EMAIL', '')
+    sender = os.getenv('SMSAERO_SENDER', 'SMS Aero')
+
+    payload = {
+        "number": phone,
+        "text": message,
+        "sign": sender,
+        "channel": "digital"
     }
-    response = requests.get(url, params=params, timeout=10)
-    result = response.json()
-    return result.get('status') == 'OK'
+
+    resp = requests.post(
+        SMSAERO_API_URL,
+        json=payload,
+        auth=(email, api_key),
+        timeout=15
+    )
+
+    try:
+        data = resp.json()
+    except ValueError:
+        print("Sms json response parse error:", resp.text)
+        return False
+
+    if data.get("success"):
+        return True
+    return False
