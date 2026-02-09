@@ -70,5 +70,37 @@ def get_or_create_duty(duty_date: date, role: DutyRole, defaults):
     return Duty.objects.get_or_create(start_datetime__date=duty_date, role=role, defaults=defaults)
 
 
+def duty_overlaps_range(role: DutyRole, range_start: date, range_end: date) -> bool:
+    """Проверяет, есть ли у роли дежурство, пересекающееся с периодом [range_start, range_end]."""
+    # end_datetime = день после последнего 8:30, значит последний день = end_datetime.date() - 1
+    return Duty.objects.filter(
+        role=role,
+        start_datetime__date__lte=range_end,
+        end_datetime__date__gt=range_start,
+    ).exists()
+
+
+def get_or_create_duty_range(
+    range_start: date, range_end: date, role: DutyRole, defaults: dict
+) -> tuple[Duty, bool]:
+    """
+    Создаёт одно дежурство на весь период [range_start, range_end] включительно.
+    start_datetime = день до первого дня 18:00, end_datetime = день после последнего 8:30.
+    Если такое дежурство уже есть (по дате начала и роли), возвращает его без создания.
+    """
+    duty_start_date = range_start - timedelta(days=1)
+    day_after_end = range_end + timedelta(days=1)
+    defaults = dict(defaults)
+    defaults["start_datetime"] = datetime(
+        duty_start_date.year, duty_start_date.month, duty_start_date.day, 18, 00, 0
+    )
+    defaults["end_datetime"] = datetime(
+        day_after_end.year, day_after_end.month, day_after_end.day, 8, 30, 0
+    )
+    return Duty.objects.get_or_create(
+        start_datetime__date=duty_start_date, role=role, defaults=defaults
+    )
+
+
 def delete_duty(duty_date: date, role: DutyRole):
     Duty.objects.filter(start_datetime__date=duty_date, role=role).delete()

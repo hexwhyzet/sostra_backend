@@ -93,8 +93,7 @@ class ExploitationRoleAdmin(CustomAdmin):
 class WeekendDutyAssignmentInline(admin.TabularInline):
     model = WeekendDutyAssignment
     extra = 0
-    fields = ("weekday", "user", "is_active")
-    ordering = ("weekday",)
+    fields = ("user", "is_active")
 
 
 class DutyRoleAdmin(CustomAdmin):
@@ -195,8 +194,8 @@ class DutyRoleAdmin(CustomAdmin):
     next_duty_stats.short_description = 'Кол-во распланированных дней'
 
 class WeekendDutyAssignmentAdmin(CustomAdmin):
-    list_display = ("role", "weekday", "user", "is_active")
-    list_filter = ("weekday", "is_active", "role")
+    list_display = ("role", "user", "is_active")
+    list_filter = ("is_active", "role")
     search_fields = ("role__name", "user__username", "user__first_name", "user__last_name")
 
 
