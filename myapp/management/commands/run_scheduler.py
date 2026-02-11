@@ -47,19 +47,6 @@ def check_missing_duties_job():
     logger.info("[check_missing_duties] tick")
 
 
-@register_job(
-    scheduler,
-    trigger=IntervalTrigger(minutes=10),
-    id="ensure_weekend_duties",
-    replace_existing=True,
-    max_instances=1,
-)
-def ensure_weekend_duties_job():
-    from dispatch.crons import ensure_weekend_duties
-    ensure_weekend_duties(days_ahead=10)
-    logger.info("[ensure_weekend_duties] tick")
-
-
 class Command(BaseCommand):
     help = "Run APScheduler in this process"
 

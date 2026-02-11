@@ -76,16 +76,16 @@ roles = {
         'audiomessage': ALL_PERMISSIONS,
     },
     DispatchSuperViewer: {
-        'incident': PermissionType.VIEW,
-        'duty': PermissionType.VIEW,
-        'dutyrole': PermissionType.VIEW.VIEW,
-        'dutypoint': PermissionType.VIEW,
-        'exploitationrole': PermissionType.VIEW,
-        'incidentmessage': PermissionType.VIEW,
-        'textmessage': PermissionType.VIEW,
-        'photomessage': PermissionType.VIEW,
-        'videomessage': PermissionType.VIEW,
-        'audiomessage': PermissionType.VIEW,
+        'incident': [PermissionType.VIEW],
+        'duty': [PermissionType.VIEW],
+        'dutyrole': [PermissionType.VIEW],
+        'dutypoint': [PermissionType.VIEW],
+        'exploitationrole': [PermissionType.VIEW],
+        'incidentmessage': [PermissionType.VIEW],
+        'textmessage': [PermissionType.VIEW],
+        'photomessage': [PermissionType.VIEW],
+        'videomessage': [PermissionType.VIEW],
+        'audiomessage': [PermissionType.VIEW],
     }
 }
 

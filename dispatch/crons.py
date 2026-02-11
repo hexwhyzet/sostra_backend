@@ -1,16 +1,12 @@
 # dispatch/cron.py
 from datetime import timedelta, datetime, date
 
-from dispatch.calendar_ru import get_non_working_ranges
-from dispatch.models import DutyRole, DutyPoint, WeekendDutyAssignment, Duty
+from dispatch.models import DutyRole, DutyPoint, Duty
 from dispatch.services.access import dispatch_admins
 from dispatch.services.duties import (
     get_current_duties,
     get_duty_point_by_duty_role,
     get_duties_by_date,
-    get_or_create_duty,
-    duty_overlaps_range,
-    get_or_create_duty_range,
 )
 from dispatch.services.notification import create_and_notify, notify_users, notify_point_admins
 from dispatch.utils import now, today
@@ -114,84 +110,3 @@ def check_missing_duties():
             )
 
 
-def ensure_weekend_duties(days_ahead: int = 10):
-    """
-    Раз в сутки проверяет: если в ближайшие N дней есть нерабочие дни (по производственному
-    календарю России) без дежурств, автоматически создаёт одно непрерывное дежурство на каждый
-    период подряд идущих нерабочих дней по назначениям WeekendDutyAssignment.
-    Если для роли не задано назначение — уведомляет dispatch-админов.
-    """
-    start_date = today()
-    end_date = start_date + timedelta(days=max(days_ahead, 1) - 1)
-
-    roles_to_check = set()
-    for point in DutyPoint.objects.all().only("level_1_role", "level_2_role", "level_3_role"):
-        if point.level_1_role_id:
-            roles_to_check.add(point.level_1_role_id)
-        if point.level_2_role_id:
-            roles_to_check.add(point.level_2_role_id)
-        if point.level_3_role_id:
-            roles_to_check.add(point.level_3_role_id)
-
-    if not roles_to_check:
-        return []
-
-    roles = list(DutyRole.objects.filter(id__in=roles_to_check).only("id"))
-    assignments = list(
-        WeekendDutyAssignment.objects.filter(is_active=True, role_id__in=roles_to_check)
-        .select_related("role", "user")
-        .only("role_id", "user_id")
-        .order_by("role_id", "id")
-    )
-    assignment_by_role = {}
-    for a in assignments:
-        if a.role_id not in assignment_by_role:
-            assignment_by_role[a.role_id] = a
-
-    ranges = get_non_working_ranges(start_date, end_date)
-    created = []
-    missing_assignments = []
-
-    for range_start, range_end in ranges:
-        for role in roles:
-            if duty_overlaps_range(role, range_start, range_end):
-                continue
-            assignment = assignment_by_role.get(role.id)
-            if assignment is None:
-                missing_assignments.append((range_start, range_end, role.id))
-                continue
-            duty, duty_created = get_or_create_duty_range(
-                range_start,
-                range_end,
-                assignment.role,
-                defaults={"user": assignment.user},
-            )
-            if duty_created:
-                created.append(duty)
-
-    if missing_assignments:
-        role_map = {
-            r.id: r
-            for r in DutyRole.objects.filter(
-                id__in=[rid for _, _, rid in missing_assignments]
-            ).only("id", "name")
-        }
-        lines = []
-        for range_start, range_end, role_id in missing_assignments:
-            role_name = (
-                role_map.get(role_id).name if role_id in role_map else f"роль {role_id}"
-            )
-            if range_start == range_end:
-                lines.append(f"{range_start.strftime('%d.%m.%Y')} — {role_name}")
-            else:
-                lines.append(
-                    f"{range_start.strftime('%d.%m.%Y')} – {range_end.strftime('%d.%m.%Y')} — {role_name}"
-                )
-        notify_users(
-            list(dispatch_admins()),
-            "Не настроены дежурные на нерабочие дни",
-            "Для следующих периодов не задано назначение:\n" + "\n".join(lines),
-            NotificationSourceEnum.DISPATCH.value,
-        )
-
-    return created

@@ -8,9 +8,18 @@ from django.urls import path
 from django.utils.html import format_html
 
 from dispatch.models import DutyPoint, DutyRole, Duty, IncidentMessage, TextMessage, VideoMessage, PhotoMessage, \
-    AudioMessage, Incident, ExploitationRole, IncidentStatusEnum, WeekendDutyAssignment
+    AudioMessage, Incident, ExploitationRole, IncidentStatusEnum
 from dispatch.services.incident_statistics import get_incident_statistics
-from dispatch.services.duties import get_duties_by_date, get_duties_assigned, get_or_create_duty, delete_duty
+from dispatch.services.duties import (
+    get_duties_by_date,
+    get_duties_assigned,
+    get_duties_covering_date,
+    get_or_create_duty,
+    get_or_create_duty_range,
+    duty_overlaps_range,
+    delete_duty,
+)
+from dispatch.calendar_ru import get_non_working_ranges
 from dispatch.utils import colors_palette, decl, today
 from myapp.admin_mixins import CustomAdmin
 from myapp.services.users import get_all_users
@@ -56,12 +65,25 @@ def get_calendar_data(year, month, role: DutyRole):
         for day in week:
             if day != 0:
                 day_date = date(year, month, day)
-                duties = get_duties_by_date(day_date, role)
+                duties = get_duties_covering_date(day_date, role)
 
-                colored_duties = [
-                    {"user": duty.user, "color": get_color(duty.user.id)}
-                    for duty in duties
-                ]
+                colored_duties = []
+                for duty in duties:
+                    # Не показываем в последний день дежурства
+                    if day_date == duty.end_datetime.date():
+                        continue
+                    start_d = duty.start_datetime.date()
+                    end_d = duty.end_datetime.date()
+                    is_multiday = end_d > start_d
+                    colored_duties.append({
+                        "user": duty.user,
+                        "color": get_color(duty.user.id),
+                        "start_date": start_d,
+                        "end_date": end_d,
+                        "start_datetime": duty.start_datetime,
+                        "end_datetime": duty.end_datetime,
+                        "is_multiday": is_multiday,
+                    })
 
                 formatted_week.append((day_date, colored_duties))
             else:
@@ -76,6 +98,7 @@ class DutyForm(forms.Form):
     start_date = forms.DateField(widget=forms.DateInput(attrs={'type': 'date'}), label="Дата начала")
     end_date = forms.DateField(required=False, widget=forms.DateInput(attrs={'type': 'date'}),
                                label="Дата окончания (Опционально)")
+    only_weekends = forms.BooleanField(required=False, label="Только по выходным")
     duty_step = forms.IntegerField(required=False, min_value=1, label="Шаг дежурства (дней) (Опционально)")
     rest_step = forms.IntegerField(required=False, min_value=1, label="Шаг отдыха (дней) (Опционально)")
 
@@ -90,15 +113,8 @@ class ExploitationRoleAdmin(CustomAdmin):
     filter_horizontal = ('members',)
 
 
-class WeekendDutyAssignmentInline(admin.TabularInline):
-    model = WeekendDutyAssignment
-    extra = 0
-    fields = ("user", "is_active")
-
-
 class DutyRoleAdmin(CustomAdmin):
     list_display = ['name', 'next_duty_stats', 'duty_schedule']
-    inlines = [WeekendDutyAssignmentInline]
 
     def get_urls(self):
         urls = super().get_urls()
@@ -121,21 +137,32 @@ class DutyRoleAdmin(CustomAdmin):
                 end_date = duty_form.cleaned_data["end_date"]
                 if end_date is None:
                     end_date = start_date
-                duty_step = duty_form.cleaned_data.get("duty_step") or 1
-                rest_step = duty_form.cleaned_data.get("rest_step") or 0
+                only_weekends = duty_form.cleaned_data.get("only_weekends") or False
 
-                current_date = start_date
-                while current_date <= end_date:
-                    for _ in range(duty_step):
-                        if current_date > end_date:
-                            break
-                        duty, created = get_or_create_duty(duty_date=current_date, role=duty_role,
-                                                           defaults={"user": user})
-                        if not created:
-                            duty.user = user
-                        duty.save()
-                        current_date += timedelta(days=1)
-                    current_date += timedelta(days=rest_step)
+                if only_weekends:
+                    ranges = get_non_working_ranges(start_date, end_date)
+                    for range_start, range_end in ranges:
+                        if duty_overlaps_range(duty_role, range_start, range_end):
+                            continue
+                        get_or_create_duty_range(
+                            range_start, range_end, duty_role, defaults={"user": user}
+                        )
+                else:
+                    duty_step = duty_form.cleaned_data.get("duty_step") or 1
+                    rest_step = duty_form.cleaned_data.get("rest_step") or 0
+                    current_date = start_date
+                    while current_date <= end_date:
+                        for _ in range(duty_step):
+                            if current_date > end_date:
+                                break
+                            duty, created = get_or_create_duty(
+                                duty_date=current_date, role=duty_role, defaults={"user": user}
+                            )
+                            if not created:
+                                duty.user = user
+                            duty.save()
+                            current_date += timedelta(days=1)
+                        current_date += timedelta(days=rest_step)
         elif request.method == "POST" and request.POST.get("form_type") == "clear_duty_form":
             clear_duty_form = ClearDutyForm(request.POST)
             if clear_duty_form.is_valid():
@@ -192,12 +219,6 @@ class DutyRoleAdmin(CustomAdmin):
         return format_html(f'<a style="color: {color}; font-weight: {font_weight}">{num} {name}</a>')
 
     next_duty_stats.short_description = 'Кол-во распланированных дней'
-
-class WeekendDutyAssignmentAdmin(CustomAdmin):
-    list_display = ("role", "user", "is_active")
-    list_filter = ("is_active", "role")
-    search_fields = ("role__name", "user__username", "user__first_name", "user__last_name")
-
 
 class DutyAdmin(CustomAdmin):
     def get_exclude(self, request, obj=None):
@@ -337,7 +358,6 @@ def register_dispatch_admin(site):
     site.register(ExploitationRole, ExploitationRoleAdmin)
     site.register(DutyRole, DutyRoleAdmin)
     site.register(Duty, DutyAdmin)
-    site.register(WeekendDutyAssignment, WeekendDutyAssignmentAdmin)
     site.register(Incident, IncidentAdmin)
     site.register(IncidentMessage)
     site.register(TextMessage)

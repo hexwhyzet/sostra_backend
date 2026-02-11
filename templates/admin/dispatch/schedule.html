@@ -9,7 +9,7 @@
             <a href="?year={{ next_year }}&month={{ next_month }}">Следующий &raquo;</a>
         </div>
 
-        <table class="calendar" style="width: max-content">
+        <table class="calendar" style="width: max-content; border-collapse: collapse;">
             <thead>
             <tr>
                 <th>Пн</th>
@@ -25,13 +25,19 @@
             {% for week in calendar_weeks %}
                 <tr>
                     {% for day, duties in week %}
-                        <td style="padding: 10px">
+                        <td style="padding: 8px 10px; vertical-align: top; border: 1px solid #e0e0e0; min-width: 100px;">
                             {% if day %}
-                                <span style="font-weight: bold">{{ day|date:"j F"|lower }}</span>
-                                <div>
+                                <span style="font-weight: bold; font-size: 13px;">{{ day|date:"j" }}</span>
+                                <span style="color: #888; font-size: 11px;">{{ day|date:"F"|lower }}</span>
+                                <div style="margin-top: 6px;">
                                     {% for duty in duties %}
-                                        <div style="padding-top: 10px; font-weight: bold; color: {{ duty.color }};">
-                                            {{ duty.user.display_name }}
+                                        <div class="duty-cell" style="margin-bottom: 8px; padding: 6px 8px; border-radius: 6px; background: {{ duty.color }}18; border-left: 3px solid {{ duty.color }};">
+                                            <div style="font-weight: 600; color: {{ duty.color }}; font-size: 13px;">
+                                                {{ duty.user.display_name }}
+                                            </div>
+                                            <div style="font-size: 11px; color: #666; margin-top: 2px; white-space: nowrap;">
+                                                {{ duty.start_datetime|date:"j E"|lower }} {{ duty.start_datetime|time:"H:i" }} – {{ duty.end_datetime|date:"j E"|lower }} {{ duty.end_datetime|time:"H:i" }}
+                                            </div>
                                         </div>
                                     {% endfor %}
                                 </div>
@@ -49,6 +55,7 @@
         {% csrf_token %}
         <input type="hidden" name="form_type" value="add_duty_form">
         {{ add_duty_form.as_p }}
+        <p style="color: #666; font-size: 12px;">«Только по выходным»: в указанном периоде создаются дежурства на каждый непрерывный отрезок нерабочих дней (по производственному календарю РФ) — с 17:30 предыдущего дня до 8:30 первого рабочего. Периоды, где у роли уже есть дежурство, пропускаются.</p>
         <input type="submit" value="Добавить">
     </form>
 

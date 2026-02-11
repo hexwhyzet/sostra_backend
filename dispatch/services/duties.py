@@ -21,11 +21,27 @@ def get_duties_by_date(start_date: date, role: DutyRole = None):
     return Duty.objects.filter(start_datetime__date=start_date, role=role)
 
 
+def get_duties_covering_date(day_date: date, role: DutyRole = None):
+    """
+    Дежурства, которые покрывают данный день (включая многодневные).
+    День входит в дежурство, если [start_datetime, end_datetime) пересекается с этим днём:
+    start_datetime.date() <= day_date и end_datetime.date() >= day_date.
+    """
+    qs = Duty.objects.filter(
+        start_datetime__date__lte=day_date,
+        end_datetime__date__gte=day_date,
+    )
+    if role is not None:
+        qs = qs.filter(role=role)
+    return qs
+
+
 def get_duties_assigned(start_date: date, duty_role: DutyRole):
+    """Число подряд идущих дней с сегодня, в которые есть дежурство (учитываются многодневные)."""
     counter = 0
     current_date = start_date
     while counter < 100:
-        if not get_duties_by_date(current_date, duty_role).exists():
+        if not get_duties_covering_date(current_date, duty_role).exists():
             break
         counter += 1
         current_date += timedelta(days=1)
@@ -72,11 +88,10 @@ def get_or_create_duty(duty_date: date, role: DutyRole, defaults):
 
 def duty_overlaps_range(role: DutyRole, range_start: date, range_end: date) -> bool:
     """Проверяет, есть ли у роли дежурство, пересекающееся с периодом [range_start, range_end]."""
-    # end_datetime = день после последнего 8:30, значит последний день = end_datetime.date() - 1
     return Duty.objects.filter(
         role=role,
         start_datetime__date__lte=range_end,
-        end_datetime__date__gt=range_start,
+        end_datetime__date__gte=range_start,
     ).exists()
 
 
@@ -85,14 +100,14 @@ def get_or_create_duty_range(
 ) -> tuple[Duty, bool]:
     """
     Создаёт одно дежурство на весь период [range_start, range_end] включительно.
-    start_datetime = день до первого дня 18:00, end_datetime = день после последнего 8:30.
+    start_datetime = день до первого дня 17:30, end_datetime = день после последнего 8:30.
     Если такое дежурство уже есть (по дате начала и роли), возвращает его без создания.
     """
     duty_start_date = range_start - timedelta(days=1)
     day_after_end = range_end + timedelta(days=1)
     defaults = dict(defaults)
     defaults["start_datetime"] = datetime(
-        duty_start_date.year, duty_start_date.month, duty_start_date.day, 18, 00, 0
+        duty_start_date.year, duty_start_date.month, duty_start_date.day, 17, 30, 0
     )
     defaults["end_datetime"] = datetime(
         day_after_end.year, day_after_end.month, day_after_end.day, 8, 30, 0
