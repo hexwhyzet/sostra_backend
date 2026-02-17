@@ -26,7 +26,7 @@ def send_fcm_notification(user: AUTH_USER_MODEL, title, body, data=None):
                 notification_body=body,
                 webpush_config={
                     "fcm_options": {
-                        "link": "http://127.0.0.1:9000/#/notifications"
+                        "link": "https://web.appsostra.ru/#/notifications"
                     },
                     "notification": {
                         "title": title,
