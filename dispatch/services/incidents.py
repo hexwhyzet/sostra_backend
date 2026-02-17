@@ -57,4 +57,4 @@ def user_incidents(user: AUTH_USER_MODEL):
         return Incident.objects.all()
 
     return Incident.objects.filter(
-        Q(author_id=user.id) | Q(responsible_user_id=user.id) | Q(point__admins=user.id)).all()
+        Q(author_id=user.id) | Q(responsible_user_id=user.id) | Q(point__admins=user.id)).distinct()

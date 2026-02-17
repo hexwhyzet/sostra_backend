@@ -24,7 +24,17 @@ def send_fcm_notification(user: AUTH_USER_MODEL, title, body, data=None):
                 fcm_token=user.device.notification_token,
                 notification_title=title,
                 notification_body=body,
-                webpush_config={"notification": {"sound": "default"}}
+                webpush_config={
+                    "fcm_options": {
+                        "link": "http://127.0.0.1:9000/#/notifications"
+                    },
+                    "notification": {
+                        "title": title,
+                        "body": body,
+                        # "icon": "https://appsostra.ru/icons/icon-192.png",
+                        # "badge": "https://appsostra.ru/icons/badge.png",
+                    },
+                },
             )
             return result
     except Exception as e:
