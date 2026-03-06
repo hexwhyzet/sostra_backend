@@ -1,6 +1,7 @@
 from datetime import date, timedelta, datetime
 
 from django.db.models import Q
+from django.contrib.auth import get_user_model
 
 from dispatch.models import Duty, DutyRole, ExploitationRole, DutyPoint
 from dispatch.utils import now
@@ -119,3 +120,24 @@ def get_or_create_duty_range(
 
 def delete_duty(duty_date: date, role: DutyRole):
     Duty.objects.filter(start_datetime__date=duty_date, role=role).delete()
+
+
+def get_duty_point_participants(point: DutyPoint):
+    """
+    Участники системы дежурства: персонал уровня 0, дежурные уровней 1–3 и ответственные лица (начальник тех. отдела).
+    Все получают уведомления по инцидентам и могут контролировать процесс.
+    """
+    User = get_user_model()
+    user_ids = set()
+
+    if point.level_0_role:
+        user_ids.update(point.level_0_role.members.values_list('id', flat=True))
+    user_ids.update(point.admins.values_list('id', flat=True))
+
+    roles = [point.level_1_role, point.level_2_role, point.level_3_role]
+    roles = [r for r in roles if r is not None]
+    if roles:
+        duty_user_ids = Duty.objects.filter(role__in=roles).values_list('user_id', flat=True).distinct()
+        user_ids.update(duty_user_ids)
+
+    return User.objects.filter(id__in=user_ids).distinct()

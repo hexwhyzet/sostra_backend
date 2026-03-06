@@ -1,6 +1,7 @@
 from itertools import chain
 
 from dispatch.services.access import dispatch_admins
+from dispatch.services.duties import get_duty_point_participants
 from myapp.utils import send_fcm_notification
 from users.models import Notification
 
@@ -38,6 +39,17 @@ def notify_point_admins(point, title, text, source, duty_action=None):
         source,
         duty_action=duty_action,
     )
+
+
+def notify_duty_point_participants(point, title, text, source, duty_action=None):
+    """
+    Отправляет уведомление всем участникам системы дежурства (уровни 0–3 и ответственные лица).
+    Уведомления сохраняются в истории (Notification).
+    """
+    if point is None:
+        return []
+    participants = get_duty_point_participants(point)
+    return notify_users(list(participants), title, text, source, duty_action=duty_action)
 
 
 def notify_admins(title, text, source):

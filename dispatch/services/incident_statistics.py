@@ -150,7 +150,7 @@ def get_incident_statistics(
                 'status': incident.status,
                 'level': incident.level,
                 'is_critical': incident.is_critical,
-                'created_at': incident.created_at.isoformat(),
+                'created_at': incident.created_at,
                 'author__id': incident.author.id if incident.author else None,
                 'author__display_name': incident.author.display_name if incident.author else None,
                 'responsible_user__id': incident.responsible_user.id if incident.responsible_user else None,

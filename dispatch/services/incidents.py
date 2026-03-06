@@ -3,7 +3,7 @@ from django.db.models import Q
 from dispatch.models import Incident, IncidentStatusEnum
 from dispatch.services.duties import get_current_duties
 from dispatch.services.messages import create_escalation_error_message_duty_not_opened, create_escalation_message
-from dispatch.services.notification import notify_point_admins, create_and_notify
+from dispatch.services.notification import notify_point_admins, notify_duty_point_participants, create_and_notify
 from dispatch.utils import now
 from myapp.admin import user_has_group
 from myapp.custom_groups import DispatchAdminManager
@@ -19,6 +19,13 @@ def escalate_incident(incident: Incident, escalation_author: AUTH_USER_MODEL):
             incident.level = i
             incident.is_critical = True
             incident.responsible_user = None
+            if incident.point:
+                notify_duty_point_participants(
+                    incident.point,
+                    incident.name,
+                    f"Инцидент повышен до критического уровня (уровень 4). Пользователь: {escalation_author.display_name}.",
+                    NotificationSourceEnum.DISPATCH.value,
+                )
             continue
 
         duty_role = getattr(incident.point, f"level_{i}_role")
@@ -44,6 +51,12 @@ def escalate_incident(incident: Incident, escalation_author: AUTH_USER_MODEL):
                 incident.point,
                 incident.name,
                 f"Инцидент был повышен до уровня {incident.level}",
+                NotificationSourceEnum.DISPATCH.value,
+            )
+            notify_duty_point_participants(
+                incident.point,
+                incident.name,
+                f"Инцидент передан дежурному уровня {incident.level}. Пользователь: {escalation_author.display_name}.",
                 NotificationSourceEnum.DISPATCH.value,
             )
         create_escalation_message(incident, i, escalation_author, duty)

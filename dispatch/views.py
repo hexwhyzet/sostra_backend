@@ -46,7 +46,7 @@ from .services.messages import (
     create_incident_acceptance_message,
     create_reopen_escalation_message,
 )
-from .services.notification import create_and_notify, notify_point_admins
+from .services.notification import create_and_notify, notify_point_admins, notify_duty_point_participants
 from .utils import now
 
 
@@ -87,6 +87,13 @@ class IncidentViewSet(viewsets.ViewSet):
         serializer = IncidentSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             incident = serializer.save()
+            if incident.point:
+                notify_duty_point_participants(
+                    incident.point,
+                    incident.name,
+                    f"Создан инцидент: {incident.name}. {incident.description[:100]}{'…' if len(incident.description) > 100 else ''}",
+                    NotificationSourceEnum.DISPATCH.value,
+                )
             escalate_incident(incident, request.user)
             return Response(serializer.data, status=201)
         return Response(serializer.errors, status=400)
@@ -131,19 +138,48 @@ class IncidentViewSet(viewsets.ViewSet):
         if new_status in ["force_closed"] and not is_admin:
             return Response({"error": "Принудительно закрыть может только dispatch_admin_manager"}, status=400)
 
+        old_status = incident.status
         incident.status = new_status
         incident.save()
 
         if new_status == "closed":
             create_close_escalation_message(incident, request.user)
+            if incident.point:
+                notify_duty_point_participants(
+                    incident.point,
+                    incident.name,
+                    f"Инцидент закрыт пользователем {request.user.display_name}.",
+                    NotificationSourceEnum.DISPATCH.value,
+                )
         elif new_status == "force_closed":
             create_force_close_escalation_message(incident, request.user)
+            if incident.point:
+                notify_duty_point_participants(
+                    incident.point,
+                    incident.name,
+                    f"Инцидент принудительно закрыт пользователем {request.user.display_name}.",
+                    NotificationSourceEnum.DISPATCH.value,
+                )
         elif new_status == "opened":
-            if incident.status in [IncidentStatusEnum.FORCE_CLOSED.value, IncidentStatusEnum.CLOSED.value]:
+            if old_status in [IncidentStatusEnum.FORCE_CLOSED.value, IncidentStatusEnum.CLOSED.value]:
                 create_reopen_escalation_message(incident, request.user)
-            elif incident.status in [IncidentStatusEnum.WAITING_TO_BE_ACCEPTED.value]:
+                if incident.point:
+                    notify_duty_point_participants(
+                        incident.point,
+                        incident.name,
+                        f"Инцидент переоткрыт пользователем {request.user.display_name}.",
+                        NotificationSourceEnum.DISPATCH.value,
+                    )
+            elif old_status == IncidentStatusEnum.WAITING_TO_BE_ACCEPTED.value:
                 if incident.responsible_user == request.user:
                     create_incident_acceptance_message(incident, request.user)
+                    if incident.point:
+                        notify_duty_point_participants(
+                            incident.point,
+                            incident.name,
+                            f"Инцидент принят пользователем {request.user.display_name}.",
+                            NotificationSourceEnum.DISPATCH.value,
+                        )
                 else:
                     return Response({"error": "Принять инцидент может только ответственный"}, status=403)
 
@@ -487,6 +523,15 @@ class IncidentMessageViewSet(viewsets.ModelViewSet):
             msg.content_type = ContentType.objects.get_for_model(content_obj)
             msg.object_id = content_obj.id
             msg.save()
+            incident = Incident.objects.get(pk=self.kwargs['incident_pk'])
+            if incident.point:
+                author_name = (request.user.display_name if request.user.is_authenticated else "Система")
+                notify_duty_point_participants(
+                    incident.point,
+                    incident.name,
+                    f"Новый комментарий к инциденту от {author_name}.",
+                    NotificationSourceEnum.DISPATCH.value,
+                )
             return Response(IncidentMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
 
         msg.delete()
