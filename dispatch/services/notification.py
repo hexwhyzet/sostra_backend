@@ -1,9 +1,36 @@
+import os
+from concurrent.futures import ThreadPoolExecutor
 from itertools import chain
+
+from django.db import close_old_connections
 
 from dispatch.services.access import dispatch_admins
 from dispatch.services.duties import get_duty_point_participants
 from myapp.utils import send_fcm_notification
 from users.models import Notification
+
+
+try:
+    _NOTIFICATION_SEND_WORKERS = max(1, int(os.getenv("NOTIFICATION_SEND_WORKERS", "4")))
+except ValueError:
+    _NOTIFICATION_SEND_WORKERS = 4
+_NOTIFICATION_EXECUTOR = ThreadPoolExecutor(max_workers=_NOTIFICATION_SEND_WORKERS)
+
+
+def _send_notification_async(user, title, text):
+    close_old_connections()
+    try:
+        send_fcm_notification(user, title, text)
+    finally:
+        close_old_connections()
+
+
+def _enqueue_notification(user, title, text):
+    try:
+        _NOTIFICATION_EXECUTOR.submit(_send_notification_async, user, title, text)
+    except Exception:
+        # Fallback to sync if the executor is unavailable
+        send_fcm_notification(user, title, text)
 
 
 def create_notification(user, title, text, source, duty_action=None):
@@ -16,7 +43,7 @@ def create_and_notify(user, title, text, source, duty_action=None):
     notification = create_notification(
         user, title, text, source, duty_action=duty_action
     )
-    send_fcm_notification(user, notification.title, notification.text)
+    _enqueue_notification(user, notification.title, notification.text)
     return notification
 
 
@@ -26,7 +53,7 @@ def notify_users(users, title, text, source, duty_action=None):
         notification = create_notification(
             point_admin, title, text, source, duty_action=duty_action
         )
-        send_fcm_notification(point_admin, notification.title, notification.text)
+        _enqueue_notification(point_admin, notification.title, notification.text)
         notifications.append(notification)
     return notifications
 
