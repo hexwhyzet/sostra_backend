@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from dispatch.models import Incident, IncidentStatusEnum, DutyPoint
+from dispatch.models import Incident, IncidentStatusEnum, DutyPoint, Duty
 from dispatch.services.duties import get_current_duties
 from dispatch.services.messages import create_escalation_error_message_duty_not_opened, create_escalation_message
 from dispatch.services.notification import notify_point_admins, notify_duty_point_participants, create_and_notify
@@ -69,12 +69,14 @@ def user_incidents(user: AUTH_USER_MODEL):
     if user_has_group(user, DispatchAdminManager):
         return Incident.objects.select_related("author", "responsible_user", "point").all()
 
+    exploitation_role_ids = user.exploitation_roles.values_list("id", flat=True)
+    role_ids = Duty.objects.filter(user=user).values_list("role_id", flat=True).distinct()
     point_ids = DutyPoint.objects.filter(
         Q(admins=user)
-        | Q(level_0_role__members=user)
-        | Q(level_1_role__duty__user=user)
-        | Q(level_2_role__duty__user=user)
-        | Q(level_3_role__duty__user=user)
+        | Q(level_0_role_id__in=exploitation_role_ids)
+        | Q(level_1_role_id__in=role_ids)
+        | Q(level_2_role_id__in=role_ids)
+        | Q(level_3_role_id__in=role_ids)
     ).values_list("id", flat=True).distinct()
 
     return (
