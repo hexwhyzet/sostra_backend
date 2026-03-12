@@ -1,6 +1,6 @@
 from django.db.models import Q
 
-from dispatch.models import Incident, IncidentStatusEnum
+from dispatch.models import Incident, IncidentStatusEnum, DutyPoint
 from dispatch.services.duties import get_current_duties
 from dispatch.services.messages import create_escalation_error_message_duty_not_opened, create_escalation_message
 from dispatch.services.notification import notify_point_admins, notify_duty_point_participants, create_and_notify
@@ -67,14 +67,21 @@ def escalate_incident(incident: Incident, escalation_author: AUTH_USER_MODEL):
 
 def user_incidents(user: AUTH_USER_MODEL):
     if user_has_group(user, DispatchAdminManager):
-        return Incident.objects.all()
+        return Incident.objects.select_related("author", "responsible_user", "point").all()
 
-    return Incident.objects.filter(
-        Q(author_id=user.id)
-        | Q(responsible_user_id=user.id)
-        | Q(point__admins=user.id)
-        | Q(point__level_0_role__members=user)
-        | Q(point__level_1_role__duty__user=user)
-        | Q(point__level_2_role__duty__user=user)
-        | Q(point__level_3_role__duty__user=user)
-    ).distinct()
+    point_ids = DutyPoint.objects.filter(
+        Q(admins=user)
+        | Q(level_0_role__members=user)
+        | Q(level_1_role__duty__user=user)
+        | Q(level_2_role__duty__user=user)
+        | Q(level_3_role__duty__user=user)
+    ).values_list("id", flat=True).distinct()
+
+    return (
+        Incident.objects.filter(
+            Q(author_id=user.id)
+            | Q(responsible_user_id=user.id)
+            | Q(point_id__in=point_ids)
+        )
+        .select_related("author", "responsible_user", "point")
+    )
