@@ -7,6 +7,11 @@ from datetime import date, timedelta
 from workalendar.europe import Russia
 
 
+def is_working_day(day: date) -> bool:
+    cal = Russia()
+    return cal.is_working_day(day)
+
+
 def get_non_working_ranges(start_date: date, end_date: date) -> list[tuple[date, date]]:
     """
     Возвращает список непрерывных периодов нерабочих дней в заданном диапазоне.

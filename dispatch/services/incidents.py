@@ -70,4 +70,11 @@ def user_incidents(user: AUTH_USER_MODEL):
         return Incident.objects.all()
 
     return Incident.objects.filter(
-        Q(author_id=user.id) | Q(responsible_user_id=user.id) | Q(point__admins=user.id)).distinct()
+        Q(author_id=user.id)
+        | Q(responsible_user_id=user.id)
+        | Q(point__admins=user.id)
+        | Q(point__level_0_role__members=user)
+        | Q(point__level_1_role__duty__user=user)
+        | Q(point__level_2_role__duty__user=user)
+        | Q(point__level_3_role__duty__user=user)
+    ).distinct()

@@ -1,3 +1,5 @@
+from datetime import time
+
 from django.contrib.auth import get_user_model
 from django.contrib.contenttypes.models import ContentType
 from django.utils import timezone
@@ -12,6 +14,7 @@ from rest_framework.response import Response
 
 from users.models import NotificationSourceEnum
 
+from .calendar_ru import is_working_day
 from .models import (
     DutyAction,
     DutyActionTypeEnum,
@@ -84,6 +87,13 @@ class IncidentViewSet(viewsets.ViewSet):
         return Response(serializer.data)
 
     def create(self, request):
+        current_dt = now()
+        current_time = current_dt.time().replace(tzinfo=None)
+        if is_working_day(current_dt.date()) and (time(8, 30) <= current_time <= time(17, 30)):
+            return Response(
+                {"error": "Создание инцидентов запрещено в рабочие дни с 08:30 до 17:30."},
+                status=403,
+            )
         serializer = IncidentSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             incident = serializer.save()
@@ -526,10 +536,38 @@ class IncidentMessageViewSet(viewsets.ModelViewSet):
             incident = Incident.objects.get(pk=self.kwargs['incident_pk'])
             if incident.point:
                 author_name = (request.user.display_name if request.user.is_authenticated else "Система")
+                notification_text = None
+                if message_type == IncidentMessage.TEXT and content_obj:
+                    raw_text = getattr(content_obj, "text", "")
+                    raw_text = raw_text.strip().replace("\n", " ")
+                    if raw_text:
+                        prefix = f"Комментарий от {author_name}: "
+                        max_preview_len = 255 - len(prefix)
+                        if max_preview_len < 0:
+                            max_preview_len = 0
+                        preview = raw_text
+                        if len(preview) > max_preview_len:
+                            if max_preview_len > 1:
+                                preview = preview[: max_preview_len - 1] + "…"
+                            else:
+                                preview = preview[:max_preview_len]
+                        notification_text = prefix + preview
+
+                if not notification_text:
+                    type_label = {
+                        IncidentMessage.TEXT: "текст",
+                        IncidentMessage.PHOTO: "фото",
+                        IncidentMessage.VIDEO: "видео",
+                        IncidentMessage.AUDIO: "аудио",
+                    }.get(message_type, "сообщение")
+                    notification_text = f"Новый комментарий ({type_label}) от {author_name}."
+
+                if len(notification_text) > 255:
+                    notification_text = notification_text[:254] + "…"
                 notify_duty_point_participants(
                     incident.point,
                     incident.name,
-                    f"Новый комментарий к инциденту от {author_name}.",
+                    notification_text,
                     NotificationSourceEnum.DISPATCH.value,
                 )
             return Response(IncidentMessageSerializer(msg).data, status=status.HTTP_201_CREATED)
