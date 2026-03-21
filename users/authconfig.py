@@ -1,6 +1,5 @@
-from django.apps import AppConfig
+from django.contrib.auth.apps import AuthConfig as DjangoAuthConfig
 
 
-class AuthConfig(AppConfig):
-    name = 'django.contrib.auth'
+class AuthConfig(DjangoAuthConfig):
     verbose_name = 'Группы'
