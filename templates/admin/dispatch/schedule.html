@@ -2,6 +2,20 @@
 
 {% block content %}
     <h2>Назначение дежурств для роли "{{ duty_role.name }}"</h2>
+    <div style="display: flex; gap: 10px; flex-wrap: wrap; margin: 12px 0 18px;">
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #dc354518; color: #dc3545; font-size: 12px; font-weight: 600;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #dc3545;"></span>
+            Не принято
+        </span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #d4a01718; color: #9a7200; font-size: 12px; font-weight: 600;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #d4a017;"></span>
+            Принято автоматически
+        </span>
+        <span style="display: inline-flex; align-items: center; gap: 6px; padding: 5px 10px; border-radius: 999px; background: #2e8b5718; color: #2e8b57; font-size: 12px; font-weight: 600;">
+            <span style="width: 10px; height: 10px; border-radius: 50%; background: #2e8b57;"></span>
+            Принято дежурным
+        </span>
+    </div>
     <div style="display: inline-block;">
         <div style="padding-bottom: 10px; width: 100%; display: flex; flex-direction: row; justify-content: space-between; align-items: center;">
             <a href="?year={{ prev_year }}&month={{ prev_month }}">&laquo; Предыдущий</a>
@@ -37,6 +51,16 @@
                                             </div>
                                             <div style="font-size: 11px; color: #666; margin-top: 2px; white-space: nowrap;">
                                                 {{ duty.start_datetime|date:"j E"|lower }} {{ duty.start_datetime|time:"H:i" }} – {{ duty.end_datetime|date:"j E"|lower }} {{ duty.end_datetime|time:"H:i" }}
+                                            </div>
+                                            {% if duty.status_label %}
+                                                <div style="margin-top: 4px; font-size: 11px; font-weight: 600; color: {{ duty.color }};">
+                                                    {{ duty.status_label }}
+                                                </div>
+                                            {% endif %}
+                                            <div style="margin-top: 6px;">
+                                                <a href="{{ duty.change_url }}" style="display: inline-block; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; color: #fff; background: {{ duty.color }}; text-decoration: none;">
+                                                    Подробнее
+                                                </a>
                                             </div>
                                         </div>
                                     {% endfor %}

@@ -7,6 +7,15 @@ from users.models import Notification, PasswordResetToken
 class NotificationAdmin(CustomAdmin):
     readonly_fields = ("created_at",)
     list_display = ("title", "user", "created_at",)
+    list_select_related = ("user",)
+    search_fields = (
+        "id__exact",
+        "title",
+        "text",
+        "user__username",
+        "user__first_name",
+        "user__last_name",
+    )
 
 
 class PasswordResetTokenAdmin(CustomAdmin):

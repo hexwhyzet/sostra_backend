@@ -4,7 +4,7 @@ from django import forms
 from django.contrib import admin
 from django.contrib.admin import AdminSite
 from django.shortcuts import render
-from django.urls import path
+from django.urls import path, reverse
 from django.utils.html import format_html
 
 from dispatch.models import DutyPoint, DutyRole, Duty, IncidentMessage, TextMessage, VideoMessage, PhotoMessage, \
@@ -20,7 +20,7 @@ from dispatch.services.duties import (
     delete_duty,
 )
 from dispatch.calendar_ru import get_non_working_ranges
-from dispatch.utils import colors_palette, decl, today
+from dispatch.utils import decl, now, today
 from myapp.admin_mixins import CustomAdmin
 from myapp.services.users import get_all_users
 
@@ -48,16 +48,7 @@ class DispatchAdmin(AdminSite):
 def get_calendar_data(year, month, role: DutyRole):
     cal = calendar.Calendar(firstweekday=0)  # Неделя начинается с понедельника
     month_days = cal.monthdayscalendar(year, month)
-
-    user_colors = {}
-    color_index = 0
-
-    def get_color(user_id):
-        nonlocal color_index
-        if user_id not in user_colors:
-            user_colors[user_id] = colors_palette[color_index % len(colors_palette)]
-            color_index += 1
-        return user_colors[user_id]
+    current_datetime = now()
 
     calendar_weeks = []
     for week in month_days:
@@ -75,14 +66,30 @@ def get_calendar_data(year, month, role: DutyRole):
                     start_d = duty.start_datetime.date()
                     end_d = duty.end_datetime.date()
                     is_multiday = end_d > start_d
+                    if not duty.is_opened:
+                        status_color = '#dc3545'
+                        status_label = 'Не принято'
+                    elif duty.is_forced_opened:
+                        status_color = '#d4a017'
+                        status_label = 'Принято автоматически'
+                    else:
+                        status_color = '#2e8b57'
+                        status_label = 'Принято дежурным'
+
+                    if duty.start_datetime > current_datetime:
+                        status_label = ''
+
                     colored_duties.append({
+                        "id": duty.id,
                         "user": duty.user,
-                        "color": get_color(duty.user.id),
+                        "color": status_color,
+                        "status_label": status_label,
                         "start_date": start_d,
                         "end_date": end_d,
                         "start_datetime": duty.start_datetime,
                         "end_datetime": duty.end_datetime,
                         "is_multiday": is_multiday,
+                        "change_url": reverse("admin:dispatch_duty_change", args=[duty.id]),
                     })
 
                 formatted_week.append((day_date, colored_duties))
@@ -231,6 +238,12 @@ class DutyRoleAdmin(CustomAdmin):
     next_duty_stats.short_description = 'Кол-во распланированных дней'
 
 class DutyAdmin(CustomAdmin):
+    autocomplete_fields = (
+        'notification_duty_is_coming',
+        'notification_duty_reminder',
+        'notification_need_to_open',
+    )
+
     def get_exclude(self, request, obj=None):
         if request.user.is_superuser:
             return None
