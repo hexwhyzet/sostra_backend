@@ -1,15 +1,20 @@
 import logging
 import tempfile
 from datetime import date, timedelta
+from io import StringIO
 from pathlib import Path
+from unittest import mock
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.management import call_command
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from django_apscheduler.models import DjangoJob, DjangoJobExecution
 
+from myapp.admin import admin as myapp_admin_module
 from myapp.management.commands.run_scheduler import scheduler
+from myapp.models import Device
 from myapp.scheduler_utils import cleanup_old_job_executions
 from myproject.observability import DailyStructuredFileHandler, build_logging_config
 
@@ -150,3 +155,119 @@ class SchedulerAdminTests(TestCase):
         cleanup_job = scheduler.get_job("cleanup_old_job_executions")
 
         self.assertIsNotNone(cleanup_job)
+
+
+class BackfillHistoryCreationCommandTests(TestCase):
+    def setUp(self):
+        self.user = get_user_model().objects.create_user(
+            username="history-backfill-user",
+            password="pass",
+        )
+
+    def _create_device_with_missing_plus_history(self):
+        device = Device.objects.create(
+            user=self.user,
+            notification_token="token-v1",
+        )
+        device.history.filter(history_type="+").delete()
+        device.notification_token = "token-v2"
+        device.save()
+        return device
+
+    def _create_device_without_history(self):
+        device = Device.objects.create(
+            user=self.user,
+            notification_token="token-v1",
+        )
+        device.history.all().delete()
+        return device
+
+    def test_dry_run_does_not_write_backfill_rows(self):
+        device = self._create_device_with_missing_plus_history()
+
+        self.assertFalse(device.history.filter(history_type="+").exists())
+        call_command(
+            "backfill_history_creation",
+            model_labels=["myapp.Device"],
+            dry_run=True,
+            batch_size=50,
+        )
+        self.assertFalse(device.history.filter(history_type="+").exists())
+
+    def test_backfill_creates_missing_plus_history_row(self):
+        device = self._create_device_with_missing_plus_history()
+
+        self.assertFalse(device.history.filter(history_type="+").exists())
+        call_command(
+            "backfill_history_creation",
+            model_labels=["myapp.Device"],
+            batch_size=50,
+        )
+
+        plus_record = device.history.filter(history_type="+").first()
+        self.assertIsNotNone(plus_record)
+        first_non_plus = device.history.exclude(history_type="+").earliest("history_date")
+        self.assertLess(plus_record.history_date, first_non_plus.history_date)
+
+    def test_backfill_skips_model_when_history_table_missing(self):
+        output = StringIO()
+        history_model = Device.history.model
+        missing_history_table = f"{history_model._meta.db_table}_missing"
+
+        with mock.patch.object(history_model._meta, "db_table", missing_history_table):
+            call_command(
+                "backfill_history_creation",
+                model_labels=["myapp.Device"],
+                dry_run=True,
+                batch_size=50,
+                stdout=output,
+            )
+
+        command_output = output.getvalue()
+        self.assertIn("Skipping myapp.device", command_output)
+        self.assertIn(missing_history_table, command_output)
+
+    def test_history_changes_shows_explanation_for_unknown_first_diff(self):
+        device = self._create_device_with_missing_plus_history()
+        call_command(
+            "backfill_history_creation",
+            model_labels=["myapp.Device"],
+            batch_size=50,
+        )
+
+        admin_instance = myapp_admin_module.site._registry[Device]
+        request = RequestFactory().get("/")
+        history_records = list(device.history.all())
+
+        admin_instance.set_history_delta_changes(request, history_records)
+
+        newest_record = history_records[0]
+        self.assertTrue(newest_record.history_delta_changes)
+        self.assertEqual(newest_record.history_delta_changes[0]["field"], "history")
+        self.assertIn(
+            "Точный diff первого изменения недоступен",
+            newest_record.history_delta_changes[0]["new"],
+        )
+
+    def test_backfill_enables_future_diff_for_objects_without_history(self):
+        device = self._create_device_without_history()
+        self.assertFalse(device.history.exists())
+
+        call_command(
+            "backfill_history_creation",
+            model_labels=["myapp.Device"],
+            batch_size=50,
+        )
+
+        self.assertTrue(device.history.filter(history_type="+").exists())
+
+        device.notification_token = "token-v2"
+        device.save()
+
+        history_records = list(device.history.all())
+        newest_record = history_records[0]
+        previous_record = history_records[1]
+        delta = newest_record.diff_against(previous_record)
+
+        self.assertEqual(newest_record.history_type, "~")
+        self.assertIn("notification_token", delta.changed_fields)
