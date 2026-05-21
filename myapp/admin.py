@@ -1,5 +1,4 @@
 import enum
-import os
 import urllib.parse
 
 from django import forms
@@ -93,8 +92,8 @@ class MyAdminSite(AdminSite):
             extra_context['unread_feedback_count'] = Feedback.objects.filter(is_read=False).count()
         return super().app_index(request, app_label, extra_context)
 
-    def get_absolute_url(self, request, view_name, *args, **kwargs):
-        return os.path.join(f'http://{request.get_host()}', 'admin', view_name)
+    def get_admin_url(self, route_name, *args, **kwargs):
+        return reverse(f'{self.name}:{route_name}', args=args, kwargs=kwargs)
 
     def get_urls(self):
         urls = super().get_urls()
@@ -142,11 +141,11 @@ class MyAdminSite(AdminSite):
             result = [
                 {
                     'label': 'Выгрузить информацию об огнетушителях',
-                    'url': self.get_absolute_url(request, 'export-fire-extinguishers/'),
+                    'url': self.get_admin_url('export_fire_extinguishers'),
                 },
                 {
                     'label': 'Выгрузить информацию об обходах',
-                    'url': self.get_absolute_url(request, 'export-guards-stats/'),
+                    'url': self.get_admin_url('guards_stats'),
                 }
             ]
             return result
@@ -155,7 +154,7 @@ class MyAdminSite(AdminSite):
             if request.user.is_superuser or request.user.groups.filter(name=CanteenAdminManager.name).exists():
                 return [{
                     'label': 'Добавить сотрудников в сервис',
-                    'url': self.get_absolute_url(request, 'manage_group_users/canteen_employee'),
+                    'url': self.get_admin_url('manage_group_users', group_name='canteen_employee'),
                 }]
 
         return []
