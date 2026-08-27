@@ -36,7 +36,7 @@ class PasswordResetRequestView(APIView):
         token_obj = PasswordResetToken.create_token(user, phone)
         
         # Отправляем SMS с кодом
-        message = f"Ваш код: {token_obj.code}"
+        message = f"Ваш код в приложении sostra {token_obj.code}"
         sms_sent = send_sms(phone, message)
         
         if not sms_sent:
